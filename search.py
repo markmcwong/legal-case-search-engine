@@ -7,7 +7,12 @@ import getopt
 import pickle
 from collections import Counter
 from nltk.stem import PorterStemmer
+from nltk.wsd import lesk
+from nltk.corpus import wordnet
 import re
+import itertools
+
+nltk.data.path.append("./nltk_data")
 
 ps = PorterStemmer()
 # global variable to hold the total number of documents indexed/searching through
@@ -15,7 +20,7 @@ num_of_docs = 100
 # dictionary terms and offset values(pointers) to be held in memory
 dictionary = {}
 # initialise pointers to files
-dictionary_file = postings_file = file_of_queries = output_file_of_results = posting_file = None
+dictionary_file = postings_file = file_of_queries = output_file_of_results = posting_file = word2vec_model = None
 
 def usage():
     print("usage: " +
@@ -119,7 +124,7 @@ def process_query(queries_file, posting_file, results_file):
     @param results_file [string]: name/path of the results file
     """
     lines = queries_file.readlines()
-    
+
     for line in lines:  # for each query
         query = query_parser(line.strip())
         results = query.evaluate_query()
@@ -130,6 +135,17 @@ def process_query(queries_file, posting_file, results_file):
         else:
             results_file.write("\n")
 
+def wordnet_expansion(sentence_in_tokens):
+    sentence_with_nltk_pos = [lesk(sentence_in_tokens, token) for token in sentence_in_tokens]
+    synonyms = [set([str(lemma.name()) for lemma in word.lemmas()]) for word in sentence_with_nltk_pos if word is not None]
+    return synonyms
+
+def word2vec_expansion(sentence_in_tokens):
+    global word2vec_model
+    if word2vec_model is None:
+        import gensim
+        word2vec_model = gensim.models.Word2Vec.load("hw4_w2v.model")
+    # todo
 class Query:
     def __init__(self, query_string, is_query_expanded = False):
         self.query_string = query_string
@@ -137,12 +153,15 @@ class Query:
         self.is_query_expanded = is_query_expanded
 
     def query_expansion(self, terms):
-        # To-do
-        return terms
+        return wordnet_expansion(terms)
 
     def evaluate_query(self):
-        # if(self.is_query_expanded):
-        #     terms = self.query_expansion(terms)
+        if(self.is_query_expanded):
+            terms = text_preprocessing(self.query_string)
+            terms = list(itertools.chain.from_iterable(self.query_expansion(terms)))
+            print("query expansion returned terms: ", terms)
+            return []
+            
         result = type(self).generate_results(self)
         if result is None:
             return []
@@ -177,7 +196,7 @@ class FreeTextQuery(Query):
         super().__init__(query_string, is_query_expanded = True)    
 
     def generate_results(self):
-        pass
+        return []
 
 class PhrasalQuery(Query):
     def __init__(self, query_string):
