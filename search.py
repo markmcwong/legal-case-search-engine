@@ -99,11 +99,11 @@ def query_parser(line):
 
                 else:
                     temp_phrasal_words += token[:-1]
-                
+
             if token == 'AND':
                 is_boolean_query_on = True
                 queries_generated[-1] = BooleanQuery(queries_generated[-1].query_string, queries_generated[-1])
-        
+
         print("Queries objects Generated (non free-text): ", queries_generated)
         return queries_generated[-1]
 
@@ -127,7 +127,7 @@ def process_query(queries_file, posting_file, results_file):
         query = query_parser(line.strip())
         results = query.evaluate_query()
         print("Query string: ", query.query_string, "\nAnd Results: ", results, '\n')
-        
+
         if(results != None):
             results_file.write(' '.join(list(map(lambda x: x[0], results))) + "\n")
         else:
@@ -160,7 +160,7 @@ class Query:
             terms = set(itertools.chain.from_iterable(self.query_expansion(terms)))
             print("query expansion returned terms: ", terms)
             return []
-            
+
         result = type(self).generate_results(self)
         if result is None:
             return []
@@ -176,7 +176,7 @@ class Query:
 
 class BooleanQuery(Query):
     def __init__(self, query_string, first_query):
-        super().__init__(query_string)    
+        super().__init__(query_string)
         self.first_query = first_query
 
     def update_second_query(self, second_query):
@@ -192,10 +192,21 @@ class BooleanQuery(Query):
 
 class FreeTextQuery(Query):
     def __init__(self, query_string):
-        super().__init__(query_string, is_query_expanded = True)    
+        super().__init__(query_string, is_query_expanded = True)
 
     def generate_results(self):
-        return []
+        terms = text_preprocessing(self.query_string)
+        results_to_return = []
+        for idx, term in enumerate(terms):
+            # if term not in dictionary, ignore that term
+            if term in dictionary:
+                posting_file.seek(int(dictionary[term][1]))
+                term_posting_list = pickle.load(posting_file) # load term postings
+                for doc in term_posting_list:
+                    if doc not in results_to_return:
+                        results_to_return.append(doc)
+
+        return results_to_return
 
 class PhrasalQuery(Query):
     def __init__(self, query_string):
@@ -226,7 +237,7 @@ class PhrasalQuery(Query):
                                 last_round_iter = iter(item[2])
                                 posting_iter = iter(doc[2])
                                 # get the first item from both lists
-                                last_round = next(last_round_iter, None) 
+                                last_round = next(last_round_iter, None)
                                 posting = next(posting_iter, None)
 
                                 while True:
@@ -249,7 +260,7 @@ class PhrasalQuery(Query):
                     # print(results_to_return)
                 if previous_phrase_results == []:
                     return
-        
+
         return previous_phrase_results
 
 
