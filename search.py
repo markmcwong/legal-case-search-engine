@@ -21,6 +21,7 @@ num_of_docs = 100
 dictionary = {}
 # initialise pointers to files
 dictionary_file = postings_file = file_of_queries = output_file_of_results = posting_file = word2vec_model = None
+file_court_combinations_found = {} #docID, court
 
 def usage():
     print("usage: " +
@@ -64,6 +65,7 @@ def text_preprocessing(file_content):
         all(char in string.punctuation for char in token))]
     return stemmed_lowered_tokens_without_punc
 
+
 # process each query (each line) in queries_file and post the results to results_file
 # one line query = one line results (max 10 docIDs)
 
@@ -102,7 +104,7 @@ def query_parser(line):
 
                 else:
                     temp_phrasal_words += token[:-1]
-            
+
             elif not is_searching_for_phrasal and token[0] != '"' and token[-1] != '"' and token != 'AND': # must be a single free text query:
                 print("is_boolean_query_on ", is_boolean_query_on)
                 if(is_boolean_query_on):
@@ -110,7 +112,7 @@ def query_parser(line):
                 else:
                     queries_generated.append(FreeTextQuery(token))
                 temp_phrasal_words = ''
-                
+
             if token == 'AND':
                 is_boolean_query_on = True
                 queries_generated[-1] = BooleanQuery(queries_generated[-1].query_string, queries_generated[-1])
@@ -155,6 +157,15 @@ def word2vec_expansion(sentence_in_tokens):
         from gensim.models import KeyedVectors
         word2vec_model = KeyedVectors.load("vectors.kv")
 
+# to be run after all other scores are processed
+# this should add some arbitrary value to all docs from a court
+#  contained in a phrasal query
+def update_scores_of_docs_with_court_queries():
+    for key in file_court_combinations_found:
+        scores[key] = scores[key] * 1.1
+
+
+
     return [map(lambda x: ps.stem(x[0]), word2vec_model.most_similar(token)[:3]) for token in sentence_in_tokens]
 class Query:
     def __init__(self, query_string, is_query_expanded = False):
@@ -176,7 +187,7 @@ class Query:
         if result is None:
             return []
         else:
-            if(type(self) == BooleanQuery): 
+            if(type(self) == BooleanQuery):
                 return type(self).generate_results(self)
             return set(map(lambda x: x[0], type(self).generate_results(self)))
 
@@ -251,6 +262,10 @@ class PhrasalQuery(Query):
                                 # get the first item from both lists
                                 last_round = next(last_round_iter, None)
                                 posting = next(posting_iter, None)
+
+                                #check if the phrasal query is equal to the court of the doc
+                                if (Query == doc[1]):
+                                    file_court_combinations_found[doc[0]] = [doc[1]] # [docID, court]
 
                                 while True:
                                     if(last_round + 1 == posting):

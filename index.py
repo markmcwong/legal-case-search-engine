@@ -5,7 +5,7 @@ import sys
 import getopt
 
 import csv
-from index_helper import * 
+from index_helper import *
 
 def usage():
     print("usage: " + sys.argv[0] + " -i directory-of-documents -d dictionary-file -p postings-file")
@@ -20,17 +20,17 @@ def build_index(in_file, out_dict, out_postings, out_docLengths = "docLengthsFil
     # Pls implement your code in below
 
     # Expand field size limit as some columns in csv have very large fields
-    field_size_limit = sys.maxsize    
+    field_size_limit = sys.maxsize
     while True:
         try:
             csv.field_size_limit(field_size_limit)
             break
         except OverflowError:
             field_size_limit = int(field_size_limit / 10)
-        
+
     # Read contents from csv file
     doc_words = []
-    with open(in_file) as csv_file:
+    with open(in_file, encoding="utf-8") as csv_file:
         csv_reader = csv.reader(csv_file, delimiter = ',')
         line_count = 0
         for row in csv_reader:
@@ -40,7 +40,7 @@ def build_index(in_file, out_dict, out_postings, out_docLengths = "docLengthsFil
             else:
                 print(row[0])
                 doc_words.append((row[0], (row[1] + ' ' + row[2] + ' ' + row[4])[:200])) # Limit for testing to 200 characters
-                
+
     print("End of file")
 
     # store token-docId pairs
@@ -59,8 +59,8 @@ def build_index(in_file, out_dict, out_postings, out_docLengths = "docLengthsFil
         docLengths.append((doc[0], get_doc_length(cleaned_tokens)))
         token_stream += new_tokens
         if BREAKNUM == 2:
-            break # for testing purposes, check 2 doc   
-        BREAKNUM += 1      
+            break # for testing purposes, check 2 doc
+        BREAKNUM += 1
 
     # Save document lengths to file (to be used during searching)
     if os.path.exists(out_docLengths):
@@ -70,7 +70,7 @@ def build_index(in_file, out_dict, out_postings, out_docLengths = "docLengthsFil
         pickle.dump(docLengths, outdl_f)
 
     # Invert to dictionary
-    # First, sort token_stream by term, docId, pos 
+    # First, sort token_stream by term, docId, pos
     token_stream.sort()
 
     # Create dictionary
