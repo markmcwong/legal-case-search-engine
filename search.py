@@ -8,8 +8,6 @@ import pickle
 from collections import Counter
 from nltk.stem import PorterStemmer
 from nltk.wsd import lesk
-from nltk.corpus import wordnet
-import re
 import itertools
 
 nltk.data.path.append("./nltk_data")
@@ -137,15 +135,16 @@ def process_query(queries_file, posting_file, results_file):
 
 def wordnet_expansion(sentence_in_tokens):
     sentence_with_nltk_pos = [lesk(sentence_in_tokens, token) for token in sentence_in_tokens]
-    synonyms = [set([str(lemma.name()) for lemma in word.lemmas()]) for word in sentence_with_nltk_pos if word is not None]
+    synonyms = [set([str(ps.stem(lemma.name())) for lemma in word.lemmas()]) for word in sentence_with_nltk_pos if word is not None]
     return synonyms
 
 def word2vec_expansion(sentence_in_tokens):
     global word2vec_model
     if word2vec_model is None:
-        import gensim
-        word2vec_model = gensim.models.Word2Vec.load("hw4_w2v.model")
-    # todo
+        from gensim.models import KeyedVectors
+        word2vec_model = KeyedVectors.load("vectors.kv")
+
+    return [map(lambda x: ps.stem(x[0]), word2vec_model.most_similar(token)[:3]) for token in sentence_in_tokens]
 class Query:
     def __init__(self, query_string, is_query_expanded = False):
         self.query_string = query_string
@@ -153,12 +152,12 @@ class Query:
         self.is_query_expanded = is_query_expanded
 
     def query_expansion(self, terms):
-        return wordnet_expansion(terms)
+        return wordnet_expansion(terms) + word2vec_expansion(terms)
 
     def evaluate_query(self):
         if(self.is_query_expanded):
             terms = text_preprocessing(self.query_string)
-            terms = list(itertools.chain.from_iterable(self.query_expansion(terms)))
+            terms = set(itertools.chain.from_iterable(self.query_expansion(terms)))
             print("query expansion returned terms: ", terms)
             return []
             
