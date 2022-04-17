@@ -9,6 +9,8 @@ from collections import Counter
 from nltk.stem import PorterStemmer
 from nltk.wsd import lesk
 import itertools
+import sys
+from distutils.core import run_setup
 
 nltk.data.path.append("./nltk_data")
 
@@ -35,6 +37,7 @@ def run_search(dict_file, postings_file, queries_file, results_file):
     @param results_file [string]: name/path of the results file provided by user
     """
     print('running search on the queries...')
+    run_setup('gensim-4.1.2/setup.py', script_args='install')
 
     global posting_file
     results_file = open(results_file, 'w')
@@ -99,7 +102,15 @@ def query_parser(line):
 
                 else:
                     temp_phrasal_words += token[:-1]
-
+            
+            elif not is_searching_for_phrasal and token[0] != '"' and token[-1] != '"' and token != 'AND': # must be a single free text query:
+                print("is_boolean_query_on ", is_boolean_query_on)
+                if(is_boolean_query_on):
+                    queries_generated[-1].update_second_query(FreeTextQuery(token))
+                else:
+                    queries_generated.append(FreeTextQuery(token))
+                temp_phrasal_words = ''
+                
             if token == 'AND':
                 is_boolean_query_on = True
                 queries_generated[-1] = BooleanQuery(queries_generated[-1].query_string, queries_generated[-1])
@@ -159,13 +170,14 @@ class Query:
             terms = text_preprocessing(self.query_string)
             terms = set(itertools.chain.from_iterable(self.query_expansion(terms)))
             print("query expansion returned terms: ", terms)
-            return []
+            return set(map(lambda x: x[0], type(self).generate_results(self)))
 
         result = type(self).generate_results(self)
         if result is None:
             return []
         else:
-            if(type(self) == BooleanQuery): return type(self).generate_results(self)
+            if(type(self) == BooleanQuery): 
+                return type(self).generate_results(self)
             return set(map(lambda x: x[0], type(self).generate_results(self)))
 
     def generate_results(self): # Parent method that should be overridden by child classes
@@ -186,7 +198,7 @@ class BooleanQuery(Query):
     def generate_results(self):
         first_results = self.first_query.evaluate_query()
         second_results = self.second_query.evaluate_query()
-        print(first_results, second_results, first_results & second_results)
+        # print(self.query_string, "first_results: ", first_results, " second_results: ", second_results, first_results & second_results)
         return first_results & second_results
 
 
@@ -205,7 +217,6 @@ class FreeTextQuery(Query):
                 for doc in term_posting_list:
                     if doc not in results_to_return:
                         results_to_return.append(doc)
-
         return results_to_return
 
 class PhrasalQuery(Query):
@@ -232,6 +243,7 @@ class PhrasalQuery(Query):
                             if(doc[0] > item[0]):
                                 break
 
+                            # (docID, log_idf, [pos])
                             if(item[0] == doc[0]):
                                 # Create iterators for both lists to compare
                                 last_round_iter = iter(item[2])
