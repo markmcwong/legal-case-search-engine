@@ -151,11 +151,6 @@ def wordnet_expansion(sentence_in_tokens):
     synonyms = [set([str(ps.stem(lemma.name())) for lemma in word.lemmas()]) for word in sentence_with_nltk_pos if word is not None]
     return synonyms
 
-def word2vec_expansion(sentence_in_tokens):
-    global word2vec_model
-    if word2vec_model is None:
-        from gensim.models import KeyedVectors
-        word2vec_model = KeyedVectors.load("vectors.kv")
 
 # to be run after all other scores are processed
 # this should add some arbitrary value to all docs from a court
@@ -164,6 +159,12 @@ def update_scores_of_docs_with_court_queries():
     for key in file_court_combinations_found:
         scores[key] = scores[key] * 1.1
 
+
+def word2vec_expansion(sentence_in_tokens):
+    global word2vec_model
+    if word2vec_model is None:
+        from gensim.models import KeyedVectors
+        word2vec_model = KeyedVectors.load("vectors.kv")
 
 
     return [map(lambda x: ps.stem(x[0]), word2vec_model.most_similar(token)[:3]) for token in sentence_in_tokens]
