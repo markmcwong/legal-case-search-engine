@@ -271,10 +271,6 @@ class PhrasalQuery(Query):
                     results_to_return = []
                     for item in previous_phrase_results:
                         for doc in term_posting_list:
-                            # Apply decompression
-                            doc = decompress(doc)
-                            item = decompress(item)
-                            
                             # if the doc ID we are looking is greater than the item, skip the rest and move on
                             if(doc[0] > item[0]):
                                 break
