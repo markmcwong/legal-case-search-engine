@@ -10,7 +10,6 @@ from nltk.stem import PorterStemmer
 from nltk.wsd import lesk
 import itertools
 import sys
-from distutils.core import run_setup
 
 nltk.data.path.append("./nltk_data")
 
@@ -38,7 +37,6 @@ def run_search(dict_file, postings_file, queries_file, results_file):
     @param results_file [string]: name/path of the results file provided by user
     """
     print('running search on the queries...')
-    run_setup('gensim-4.1.2/setup.py', script_args='install')
 
     global posting_file
     results_file = open(results_file, 'w')

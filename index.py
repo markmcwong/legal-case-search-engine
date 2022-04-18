@@ -3,9 +3,9 @@ import re
 import nltk
 import sys
 import getopt
-
 import csv
 from index_helper import *
+from setup import setup_dependencies
 
 def usage():
     print("usage: " + sys.argv[0] + " -i directory-of-documents -d dictionary-file -p postings-file")
@@ -117,4 +117,5 @@ if input_file == None or output_file_postings == None or output_file_dictionary 
     usage()
     sys.exit(2)
 
+setup_dependencies()
 build_index(input_file, output_file_dictionary, output_file_postings)

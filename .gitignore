@@ -2,3 +2,4 @@
 *.txt
 CS3245-hw4-check.sh
 dataset.zip
+__pycache__
