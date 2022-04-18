@@ -412,9 +412,9 @@ def decompress(compressed_tuple):
     """
     Decompress the tuple inside posting list read from disk (which was compressed using variable byte encoding, and delta compression)
     """
-    docID = VBDecode(compressed_posting[0])[0]
-    log_tf = VBDecode(compressed_posting[1])[0]
-    deltas = VBDecode(compressed_posting[2])
+    docID = VBDecode(compressed_tuple[0])[0]
+    log_tf = VBDecode(compressed_tuple[1])[0]
+    deltas = VBDecode(compressed_tuple[2])
     pos_lst = from_deltas(deltas)
     return (docID, log_tf, pos_lst)
 
