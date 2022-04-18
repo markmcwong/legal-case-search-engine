@@ -2,7 +2,7 @@
 *.txt
 CS3245-hw4-check.sh
 dataset.zip
-__pycache__
-gensim
-numpy
-smart_open
+__pycache__/
+gensim/
+numpy/
+smart_open/
