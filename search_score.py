@@ -11,6 +11,7 @@ from nltk.wsd import lesk
 import itertools
 import sys
 from distutils.core import run_setup
+from translator import britishize
 
 nltk.data.path.append("./nltk_data")
 
@@ -50,19 +51,18 @@ def run_search(dict_file, postings_file, queries_file, results_file):
     process_query(queries_file, posting_file, results_file)
 
 
-def text_preprocessing(file_content):
+def text_preprocessing(query):
     """
-    Process the text provided by tokenizing, stemming/lower casing, and removing terms
-    that are only punctuation
-    @param file_content [string]: original text read from file
+    Process the text provided by tokenizing, stemming/lower casing, and standerising to British English
+    @param file_content [string]: original query text
     @return [string]: a list of word processed tokens
     """
-    content_in_tokens = nltk.word_tokenize(file_content)
+    content_in_tokens = nltk.word_tokenize(query)
     stemmed_lowered_tokens = [ps.stem(token.lower())
                               for token in content_in_tokens]
-    stemmed_lowered_tokens_without_punc = [token for token in stemmed_lowered_tokens if not(
-        all(char in string.punctuation for char in token))]
-    return stemmed_lowered_tokens_without_punc
+    stemmed_lowered_tokens_britishized = [britishize(token)
+                              for token in stemmed_lowered_tokens]
+    return stemmed_lowered_tokens_britishized
 
 # process each query (each line) in queries_file and post the results to results_file
 # one line query = one line results (max 10 docIDs)
