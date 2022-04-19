@@ -7,6 +7,7 @@ import getopt
 import csv
 import string
 import time
+import vbcode
 from index_helper import *
 from translator import britishize
 from tqdm import tqdm
