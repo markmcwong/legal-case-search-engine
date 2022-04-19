@@ -242,7 +242,7 @@ class FreeTextQuery(Query):
         posting_file.seek(int(ptr))
         court_dic = pickle.load(posting_file) # dictionary containing docid -> [court...] info
         for did, val in scores.items(): # repeat for each document
-            courts = court_dic[did]
+            courts = court_dic[str(did)]
             # extract greatest court value
             court_value = max([COURT_HIERARCHY[court] if court in COURT_HIERARCHY else 0 for court in courts])
             # modify score to include court value
@@ -333,7 +333,7 @@ class PhrasalQuery(Query):
         posting_file.seek(ptr)
         court_dic = pickle.load(posting_file) # dictionary containing docid -> [court...] info
         for did, val in scores.items(): # repeat for each document
-            courts = court_dic[did]
+            courts = court_dic[str(did)]
             # extract greatest court value
             court_value = max([COURT_HIERARCHY[court] if court in COURT_HIERARCHY else 0 for court in courts])
             # modify score to include court value
