@@ -11,6 +11,7 @@ from nltk.wsd import lesk
 import itertools
 import sys
 from distutils.core import run_setup
+from translator import britishize
 
 nltk.data.path.append("./nltk_data")
 
@@ -50,19 +51,18 @@ def run_search(dict_file, postings_file, queries_file, results_file):
     process_query(queries_file, posting_file, results_file)
 
 
-def text_preprocessing(file_content):
+def text_preprocessing(query):
     """
-    Process the text provided by tokenizing, stemming/lower casing, and removing terms
-    that are only punctuation
-    @param file_content [string]: original text read from file
+    Process the text provided by tokenizing, stemming/lower casing, and standerising to British English
+    @param file_content [string]: original query text
     @return [string]: a list of word processed tokens
     """
-    content_in_tokens = nltk.word_tokenize(file_content)
+    content_in_tokens = nltk.word_tokenize(query)
     stemmed_lowered_tokens = [ps.stem(token.lower())
                               for token in content_in_tokens]
-    stemmed_lowered_tokens_without_punc = [token for token in stemmed_lowered_tokens if not(
-        all(char in string.punctuation for char in token))]
-    return stemmed_lowered_tokens_without_punc
+    stemmed_lowered_tokens_britishized = [britishize(token)
+                              for token in stemmed_lowered_tokens]
+    return stemmed_lowered_tokens_britishized
 
 # process each query (each line) in queries_file and post the results to results_file
 # one line query = one line results (max 10 docIDs)
@@ -220,6 +220,7 @@ class FreeTextQuery(Query):
             if term in dictionary:
                 posting_file.seek(int(dictionary[term][1]))
                 term_posting_list = pickle.load(posting_file) # load term postings
+                term_posting_list = decompress_posting(term_posting_list) # Apply decompression
                 ## Calculate query weight
                 query_weight = query_logtf_dic[term] * math.log(num_of_docs/dictionary[term][0]) ##logtf * idf
                 for doc in term_posting_list:
@@ -262,6 +263,7 @@ class PhrasalQuery(Query):
             else:
                 posting_file.seek(int(dictionary[term][1]))
                 term_posting_list = pickle.load(posting_file)  # load term postings
+                term_posting_list = decompress_posting(term_posting_list) # apply decompression
                 if (idx == 0):
                     previous_phrase_results = term_posting_list
                     continue
@@ -311,6 +313,7 @@ class PhrasalQuery(Query):
             if term in dictionary:
                 posting_file.seek(int(dictionary[term][1]))
                 term_posting_list = pickle.load(posting_file) # load term postings
+                term_posting_list = decompress_posting(term_posting_list)
                 ## Calculate query weight
                 query_weight = query_logtf_dic[term] * math.log(num_of_docs/dictionary[term][0]) ##logtf * idf
                 for doc in term_posting_list:
@@ -394,6 +397,38 @@ def update_score(posting_list, query_tf, scores, weights, df):
         doc_weight = 1
         # doc_weight = doc_weighted_tf # no calculation needed as it is already weighted during indexing step
         scores[doc_ID] += (query_weight * doc_weight)
+
+def decompress_posting(compressed_posting):
+    """
+    Decompress the posting list read from disk (which was compressed using variable byte encoding, and delta compression)
+    """
+    decompressed_posting = []
+    for tuple in compressed_posting:
+        decompressed_tuple = decompress(tuple)
+        decompressed_posting.append(decompressed_tuple)
+    return decompressed_posting
+
+def decompress(compressed_tuple):
+    """
+    Decompress the tuple inside posting list read from disk (which was compressed using variable byte encoding, and delta compression)
+    """
+    docID = VBDecode(compressed_tuple[0])[0]
+    log_tf = VBDecode(compressed_tuple[1])[0]
+    deltas = VBDecode(compressed_tuple[2])
+    pos_lst = from_deltas(deltas)
+    return (docID, log_tf, pos_lst)
+
+def from_deltas(deltas):
+    """
+    Convert a list of delta numbers(difference between numbers) to the actual list of numbers
+    """
+    if not deltas:
+        return deltas
+
+    numbers = [deltas[0]]
+    for i in deltas[1:]:
+        numbers.append(i + numbers[-1])
+    return numbers
 
 try:
     opts, args = getopt.getopt(sys.argv[1:], 'd:p:q:o:')
