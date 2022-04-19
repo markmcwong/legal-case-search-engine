@@ -26,12 +26,14 @@ dictionary = {}
 # these are stored so their scores are not accidentally increased twice
 docs_with_court_queries_found = []
 # initialise pointers to files
-dictionary_file = postings_file = file_of_queries = output_file_of_results = posting_file = word2vec_model = None
+dictionary_file = postings_file = file_of_queries = output_file_of_results = posting_file = word2vec_model = doc_lengths_dict = None
 
 def usage():
     print("usage: " +
           sys.argv[0] + " -d dictionary-file -p postings-file -q file-of-queries -o output-file-of-results")
 
+def default_dict_def():
+    return [0, []]
 
 def run_search(dict_file, postings_file, queries_file, results_file):
     """
@@ -233,11 +235,11 @@ class FreeTextQuery(Query):
                     relevant_docs.append(doc[0])
         # Normalize
         for i in relevant_docs:
-            scores[i] = scores[i] / dictionary['DOC_LENGTH'][i]
+            scores[i] = scores[i] / doc_lengths_dict[i]
 
         # Add court score
         ptr = dictionary['DOC_COURT'] # pointer to another dictionary
-        posting_file.seek(ptr)
+        posting_file.seek(int(ptr))
         court_dic = pickle.load(posting_file) # dictionary containing docid -> [court...] info
         for did, val in scores.items(): # repeat for each document
             courts = court_dic[did]
@@ -324,7 +326,7 @@ class PhrasalQuery(Query):
                     scores[doc[0]] += query_weight * doc[1] ## scores[docid] += queryweight * docweight
         # Normalize
         for i in relevant_docs:
-            scores[i] = scores[i] / dictionary['DOC_LENGTH'][i]
+            scores[i] = scores[i] / doc_lengths_dict[i]
 
         # Add court score
         ptr = dictionary['DOC_COURT'] # pointer to another dictionary
@@ -354,9 +356,10 @@ def build_dictionary(dict_file):
     line by line, very small overhead for search function
     @param dict_file [string]: name/path of the dictionary file
     """
-    global dictionary
+    global dictionary, doc_lengths_dict
     dictionary = pickle.load(dict_file)
-    # print(dictionary)
+    posting_file.seek(int(dictionary['DOC_LENGTH']))
+    doc_lengths_dict = pickle.load(posting_file)
 
 
 def idf_weight(doc_freq):
