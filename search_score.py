@@ -178,8 +178,8 @@ class Query:
 
         if(self.is_query_expanded):
             #terms = text_preprocessing(self.query_string)
-            terms = set(itertools.chain.from_iterable(self.query_expansion(terms))) # temporarily remove query expansion
-            print("query expansion returned terms: ", terms)
+            # terms = set(itertools.chain.from_iterable(self.query_expansion(terms))) # temporarily remove query expansion
+            # print("query expansion returned terms: ", terms)
             # Create dictionary to store query log tf
             return type(self).generate_results(self, query_logtf_dic)
 
@@ -209,6 +209,8 @@ class BooleanQuery(Query):
         second_results = self.second_query.evaluate_query()
         first_results_in_ids = list(map(lambda x: x[1], first_results))
         second_results_in_ids = list(map(lambda x: x[1], second_results))
+
+        print(second_results_in_ids)
 
         result = {}
         for k, v in first_results + second_results:
@@ -284,12 +286,14 @@ class PhrasalQuery(Query):
                     results_to_return = []
                     for item in previous_phrase_results:
                         for doc in term_posting_list:
+                            # print(doc, item)
                             # if the doc ID we are looking is greater than the item, skip the rest and move on
                             if(doc[0] > item[0]):
                                 break
 
                             # (docID, log_idf, [pos])
                             if(item[0] == doc[0]):
+                                # print(doc, item)
                                 # Create iterators for both lists to compare
                                 last_round_iter = iter(item[2])
                                 posting_iter = iter(doc[2])
@@ -300,9 +304,9 @@ class PhrasalQuery(Query):
                                 while True:
                                     if(last_round + 1 == posting):
                                         if(len(results_to_return) == 0 or results_to_return[-1][0] != item[0]):
-                                            results_to_return.append(item)
+                                            results_to_return.append((doc[0], doc[1], [posting]))
                                         else:
-                                            results_to_return[-1] = (posting, results_to_return[-1][1] + 1, results_to_return[-1][2] + [last_round])
+                                            results_to_return[-1][2].append(last_round)
                                         last_round = next(last_round_iter, None)
                                         posting = next(posting_iter, None)
                                     elif(last_round < posting):
@@ -312,13 +316,21 @@ class PhrasalQuery(Query):
 
                                     if(next(posting_iter, None) is None or next(last_round_iter, None) is None):
                                         break
+                    
+                    # print("results_to_return", sum(map(lambda x: len(x[2]), results_to_return)))
+                    # print("results_to_return", results_to_return)
+                    if(results_to_return == []):
+                        return []
+                    else:
+                        previous_phrase_results = results_to_return
 
                     # print(results_to_return)
                 if previous_phrase_results == []:
-                    return
+                    return []
 
         #Score calculation based on relevant docs
         relevant_docs = list(map(lambda x: x[0], previous_phrase_results))
+        print('previous: ', relevant_docs)
         scores = {}
         for idx, term in enumerate(terms):
             # if term not in dictionary, ignore that term
