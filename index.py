@@ -9,8 +9,8 @@ import string
 import time
 from index_helper import *
 from translator import britishize
-from profiler import profile
 from tqdm import tqdm
+from collections import defaultdict
 
 # Turn on/off compression methods
 DELTA_COMPRESSION = True
@@ -20,7 +20,6 @@ VB_COMPRESSION = True
 def usage():
     print("usage: " + sys.argv[0] + " -i directory-of-documents -d dictionary-file -p postings-file")
 
-@profile
 def build_index(in_file, out_dict, out_postings):
     """
     build index from documents stored in the input file,
@@ -36,7 +35,7 @@ def build_index(in_file, out_dict, out_postings):
     print('indexing...')
 
     # Expand field size limit as some columns in csv have very large fields
-    field_size_limit = sys.maxsize    
+    field_size_limit = sys.maxsize
     while True:
         try:
             csv.field_size_limit(field_size_limit)
@@ -78,17 +77,17 @@ def build_index(in_file, out_dict, out_postings):
     #print(N)
     
     # Initialize dictionary
-    dictionary = {}
+    dictionary = defaultdict(lambda: [0, []])
     dictionary['DOC_LENGTH'] = {}
     
     # debugging
     #doc_words = doc_words[3000:]
     
-    BREAKNUM = 1
+   # BREAKNUM = 1
     for doc in tqdm(doc_words):
-        if BREAKNUM == 1000:
-            break # for testing purposes, check 2 doc
-        BREAKNUM += 1
+        #if BREAKNUM == 3:
+        #    break # for testing purposes, check 2 doc
+        #BREAKNUM += 1
         """
         if BREAKNUM % 100 == 0:
             print("Current progress:", BREAKNUM)
@@ -101,17 +100,17 @@ def build_index(in_file, out_dict, out_postings):
         regex = re.compile('[^\u0020-\u024F]')
         text = regex.sub('',text)
         
+        # Remove punctuations
+        text = text.translate(None, string.punctuation)
+        
         # Standardize to british english
         text = britishize(text)
         
         # Remove single quotations
         text = text.replace("'","")
         
-        # Remove all punctuations
-        text = text.translate(str.maketrans('', '', string.punctuation))
-        
         # Initialize term frequency map to store term frequency and a list of positions
-        freq_map = {}
+        freq_map = defaultdict(lambda: [0, []])
         
         # Initialize term position
         pos = 0
@@ -121,7 +120,7 @@ def build_index(in_file, out_dict, out_postings):
             for word in nltk.word_tokenize(sentence):
                 # Skip term that are solely punctuations
                 #if all(char in string.punctuation for char in word):
-                #    continue
+                    #continue
                     
                 if word in stemDict:
                     stemmed_word = stemDict[word]
@@ -160,13 +159,8 @@ def build_index(in_file, out_dict, out_postings):
             # structure of each value in the dictionary:
             # (document_frequency, [(docID_1, log_tf_1, [position1,position2...]), (docID_2, log_tf_2, [position1,position2...]) ... (docID_n, log_tf_n, [position1,position2...])])
             
-            if term not in dictionary:
-                dictionary[term] = (1, [(int(doc[0]), log_tf, pos_list)])
-            else:
-                # Update current document frequency
-                df = dictionary[term][0] + 1
-                posting = dictionary[term][1] + [(int(doc[0]), log_tf, pos_list)]
-                dictionary[term] = (df,posting)
+            dictionary[term][0] += 1
+            dictionary[term][1].append((int(doc[0]), log_tf, pos_list))
         
         # Compute and store the document length for current document, to be used in normalization in searching
         dictionary['DOC_LENGTH'][int(doc[0])] = math.sqrt(doc_length)
@@ -240,6 +234,15 @@ def calculate_deltas(numbers):
     for i, n in enumerate(numbers[1:]):
         deltas.append(n - numbers[i])
     return deltas
+
+def from_deltas(deltas):
+    if not deltas:
+        return deltas
+
+    numbers = [deltas[0]]
+    for i in deltas[1:]:
+        numbers.append(i + numbers[-1])
+    return numbers
 
 input_file = output_file_dictionary = output_file_postings = None
 
