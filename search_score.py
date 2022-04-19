@@ -22,6 +22,9 @@ ps = PorterStemmer()
 num_of_docs = 100
 # dictionary terms and offset values(pointers) to be held in memory
 dictionary = {}
+# list of all doc_id's that have been searched for when a court was in a phrasal query
+# these are stored so their scores are not accidentally increased twice
+docs_with_court_queries_found = []
 # initialise pointers to files
 dictionary_file = postings_file = file_of_queries = output_file_of_results = posting_file = word2vec_model = None
 
@@ -102,7 +105,7 @@ def query_parser(line):
 
                 else:
                     temp_phrasal_words += token[:-1]
-            
+
             elif not is_searching_for_phrasal and token[0] != '"' and token[-1] != '"' and token != 'AND': # must be a single free text query:
                 print("is_boolean_query_on ", is_boolean_query_on)
                 if(is_boolean_query_on):
@@ -110,7 +113,7 @@ def query_parser(line):
                 else:
                     queries_generated.append(FreeTextQuery(token))
                 temp_phrasal_words = ''
-                
+
             if token == 'AND':
                 is_boolean_query_on = True
                 queries_generated[-1] = BooleanQuery(queries_generated[-1].query_string, queries_generated[-1])
@@ -170,14 +173,14 @@ class Query:
         terms = text_preprocessing(self.query_string)
         # Create dictionary to store query log tf
         query_logtf_dic = {term: 1 + math.log(list(terms).count(term), 10) for term in terms}
-         
+
         if(self.is_query_expanded):
             #terms = text_preprocessing(self.query_string)
             #terms = set(itertools.chain.from_iterable(self.query_expansion(terms))) # temporarily remove query expansion
             print("query expansion returned terms: ", terms)
             # Create dictionary to store query log tf
             return type(self).generate_results(self, query_logtf_dic)
-        
+
         if(type(self) == BooleanQuery):
             return type(self).generate_results(self)
         else:
@@ -203,7 +206,7 @@ class BooleanQuery(Query):
         first_results = self.first_query.evaluate_query()
         second_results = self.second_query.evaluate_query()
         return list(set(first_results) & set(second_results))
-                   
+
 
 COURT_HIERARCHY = {'SG Court of Appeal': 2, 'SG Privy Council': 2, 'UK House of Lords': 2, 'UK Supreme Court': 2, 'High Court of Australia': 2, 'CA Supreme Court': 2, 'SG High Court': 1, 'Singapore International Commercial Court': 1, 'HK High Court': 1, 'HK Court of First Instance': 1, 'UK Crown Court': 1, 'UK Court of Appeal': 1, 'UK High Court': 1, 'Federal Court of Australia': 1, 'NSW Court of Appeal': 1, 'NSW Court of Criminal Appeal': 1, 'NSW Supreme Court': 1}
 
@@ -238,16 +241,16 @@ class FreeTextQuery(Query):
         court_dic = pickle.load(posting_file) # dictionary containing docid -> [court...] info
         for did, val in scores.items(): # repeat for each document
             courts = court_dic[did]
-            # extract greatest court value 
+            # extract greatest court value
             court_value = max([COURT_HIERARCHY[court] if court in COURT_HIERARCHY else 0 for court in courts])
             # modify score to include court value
             scores[did] += court_value
-            
+
 
         # Sort and return docs in ranked order
         results_to_return = sorted(((val, did) for did, val in scores.items()), reverse = True)
         return results_to_return
-                    
+
 
 
 class PhrasalQuery(Query):
@@ -306,7 +309,7 @@ class PhrasalQuery(Query):
 
         #Score calculation based on relevant docs
         relevant_docs = list(map(lambda x: x[0], previous_phrase_results))
-        scores = {} 
+        scores = {}
         for idx, term in enumerate(terms):
             # if term not in dictionary, ignore that term
             if term in dictionary:
@@ -322,17 +325,23 @@ class PhrasalQuery(Query):
         # Normalize
         for i in relevant_docs:
             scores[i] = scores[i] / dictionary['DOC_LENGTH'][i]
-        
+
         # Add court score
         ptr = dictionary['DOC_COURT'] # pointer to another dictionary
         posting_file.seek(ptr)
         court_dic = pickle.load(posting_file) # dictionary containing docid -> [court...] info
         for did, val in scores.items(): # repeat for each document
             courts = court_dic[did]
-            # extract greatest court value 
+            # extract greatest court value
             court_value = max([COURT_HIERARCHY[court] if court in COURT_HIERARCHY else 0 for court in courts])
             # modify score to include court value
             scores[did] += court_value
+
+            #if the phrase equals a court, add to the score of all docs from that court
+            if Query in courts:
+                if did not in docs_with_court_queries_found:
+                    docs_with_court_queries_found.append(did)
+                    scores[did]  = scores[did] * 1.3
 
         # Sort and return docs in ranked order
         results_to_return = sorted(((val, did) for did, val in scores.items()), reverse = True)
