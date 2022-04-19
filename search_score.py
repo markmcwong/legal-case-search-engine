@@ -151,7 +151,8 @@ def process_query(queries_file, posting_file, results_file):
 
 def wordnet_expansion(sentence_in_tokens):
     sentence_with_nltk_pos = [lesk(sentence_in_tokens, token) for token in sentence_in_tokens]
-    synonyms = [set([str(ps.stem(lemma.name())) for lemma in word.lemmas()]) for word in sentence_with_nltk_pos if word is not None]
+    synonyms = [set([str(lemma.name()) for lemma in word.lemmas() if '_' not in lemma.name()]) if word is not None else {} for word in sentence_with_nltk_pos ]
+    # print(synonyms)
     return synonyms
 
 def word2vec_expansion(sentence_in_tokens):
@@ -160,7 +161,10 @@ def word2vec_expansion(sentence_in_tokens):
         from gensim.models import KeyedVectors
         word2vec_model = KeyedVectors.load("vectors.kv")
 
-    return [map(lambda x: ps.stem(x[0]), word2vec_model.most_similar(token)[:3]) if token in word2vec_model else token for token in sentence_in_tokens]
+    expanded_terms = [word2vec_model.most_similar(token)[:5] if token in word2vec_model else token for token in sentence_in_tokens]
+    # print(sentence_in_tokens)
+    # print(expanded_terms)
+    return expanded_terms
 
 class Query:
     def __init__(self, query_string, is_query_expanded = False):
@@ -169,7 +173,25 @@ class Query:
         self.is_query_expanded = is_query_expanded
 
     def query_expansion(self, terms):
-        return wordnet_expansion(terms) + word2vec_expansion(terms)
+        wordnet_terms = wordnet_expansion(self.query_string.split())
+        word2vec_terms = text_preprocessing(self.query_string)
+        word2vec_terms = word2vec_expansion(word2vec_terms)
+        # print(word2vec_model.most_similar('damage'))
+        full_terms_list = [terms]
+        for i in range(len(terms)):
+            terms_to_return = set(list(wordnet_terms[i])[:1])
+            # + [word2vec_terms[i][0][0]])
+            # terms_to_return = set()
+            # print(type(word2vec_terms[i][0]),word2vec_terms[i])
+            if(type(word2vec_terms[i]) is str):
+                terms_to_return.add(word2vec_terms[i])
+            else:
+                terms_to_return.add(word2vec_terms[i][0][0])
+
+            intersection = set(list(wordnet_terms[i])) & set(word2vec_terms[i][0])         
+            set.union(intersection, terms_to_return)
+            full_terms_list.append(terms_to_return)
+        return full_terms_list
 
     def evaluate_query(self):
         terms = text_preprocessing(self.query_string)
@@ -177,11 +199,12 @@ class Query:
         query_logtf_dic = {term: 1 + math.log(list(terms).count(term), 10) for term in terms}
 
         if(self.is_query_expanded):
-            #terms = text_preprocessing(self.query_string)
-            # terms = set(itertools.chain.from_iterable(self.query_expansion(terms))) # temporarily remove query expansion
-            # print("query expansion returned terms: ", terms)
+            terms = list(itertools.chain.from_iterable(self.query_expansion(terms))) # temporarily remove query expansion
+            terms = set(text_preprocessing(' '.join(terms)))
+            print("query expansion returned terms: ", terms)
+            query_logtf_dic = {term: 1 + math.log(list(terms).count(term), 10) for term in terms}
             # Create dictionary to store query log tf
-            return type(self).generate_results(self, query_logtf_dic)
+            return type(self).generate_results(self, terms, query_logtf_dic)
 
         if(type(self) == BooleanQuery):
             return type(self).generate_results(self)
@@ -224,8 +247,7 @@ class FreeTextQuery(Query):
     def __init__(self, query_string):
         super().__init__(query_string, is_query_expanded = True)
 
-    def generate_results(self, query_logtf_dic):
-        terms = text_preprocessing(self.query_string)
+    def generate_results(self, terms, query_logtf_dic):
         scores = {}
         relevant_docs = []
         for idx, term in enumerate(terms):
@@ -259,6 +281,7 @@ class FreeTextQuery(Query):
 
         # Sort and return docs in ranked order
         results_to_return = sorted(((val, did) for did, val in scores.items()), reverse = True)
+        print("number of docs returned: ", len(results_to_return))
         return results_to_return
 
 
