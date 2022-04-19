@@ -178,7 +178,7 @@ class Query:
 
         if(self.is_query_expanded):
             #terms = text_preprocessing(self.query_string)
-            #terms = set(itertools.chain.from_iterable(self.query_expansion(terms))) # temporarily remove query expansion
+            terms = set(itertools.chain.from_iterable(self.query_expansion(terms))) # temporarily remove query expansion
             print("query expansion returned terms: ", terms)
             # Create dictionary to store query log tf
             return type(self).generate_results(self, query_logtf_dic)
@@ -208,12 +208,13 @@ class BooleanQuery(Query):
         first_results = self.first_query.evaluate_query()
         second_results = self.second_query.evaluate_query()
         first_results_in_ids = list(map(lambda x: x[1], first_results))
+        second_results_in_ids = list(map(lambda x: x[1], second_results))
 
         result = {}
         for k, v in first_results + second_results:
             result[v] = (result.get(v, 0) + k)
 
-        overlapped = {k:v for k,v in result.items() if k in first_results_in_ids}
+        overlapped = {k:v for k,v in result.items() if k in first_results_in_ids and k in second_results_in_ids}
         results_to_return = sorted(((val, did) for did, val in overlapped.items()), reverse = True)
         return results_to_return
 
