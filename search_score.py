@@ -142,10 +142,10 @@ def process_query(queries_file, posting_file, results_file):
     for line in lines:  # for each query
         query = query_parser(line.strip())
         results = query.evaluate_query()
-        print("Query string: ", query.query_string, "\nAnd Results: ", results, '\n')
+        print("Query string: ", query.query_string, '\n')
 
         if(results != None):
-            results_file.write(' '.join(list(map(str, results))) + "\n")
+            results_file.write(' '.join(list(map(lambda x: str(x[1]), results))) + "\n")
         else:
             results_file.write("\n")
 
@@ -207,8 +207,15 @@ class BooleanQuery(Query):
     def generate_results(self):
         first_results = self.first_query.evaluate_query()
         second_results = self.second_query.evaluate_query()
-        return list(set(first_results) & set(second_results))
+        first_results_in_ids = list(map(lambda x: x[1], first_results))
 
+        result = {}
+        for k, v in first_results + second_results:
+            result[v] = (result.get(v, 0) + k)
+
+        overlapped = {k:v for k,v in result.items() if k in first_results_in_ids}
+        results_to_return = sorted(((val, did) for did, val in overlapped.items()), reverse = True)
+        return results_to_return
 
 COURT_HIERARCHY = {'SG Court of Appeal': 2, 'SG Privy Council': 2, 'UK House of Lords': 2, 'UK Supreme Court': 2, 'High Court of Australia': 2, 'CA Supreme Court': 2, 'SG High Court': 1, 'Singapore International Commercial Court': 1, 'HK High Court': 1, 'HK Court of First Instance': 1, 'UK Crown Court': 1, 'UK Court of Appeal': 1, 'UK High Court': 1, 'Federal Court of Australia': 1, 'NSW Court of Appeal': 1, 'NSW Court of Criminal Appeal': 1, 'NSW Supreme Court': 1}
 
@@ -242,7 +249,7 @@ class FreeTextQuery(Query):
         posting_file.seek(int(ptr))
         court_dic = pickle.load(posting_file) # dictionary containing docid -> [court...] info
         for did, val in scores.items(): # repeat for each document
-            courts = court_dic[did]
+            courts = court_dic[str(did)]
             # extract greatest court value
             court_value = max([COURT_HIERARCHY[court] if court in COURT_HIERARCHY else 0 for court in courts])
             # modify score to include court value
@@ -333,7 +340,7 @@ class PhrasalQuery(Query):
         posting_file.seek(ptr)
         court_dic = pickle.load(posting_file) # dictionary containing docid -> [court...] info
         for did, val in scores.items(): # repeat for each document
-            courts = court_dic[did]
+            courts = court_dic[str(did)]
             # extract greatest court value
             court_value = max([COURT_HIERARCHY[court] if court in COURT_HIERARCHY else 0 for court in courts])
             # modify score to include court value
