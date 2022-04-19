@@ -284,14 +284,12 @@ class PhrasalQuery(Query):
                     results_to_return = []
                     for item in previous_phrase_results:
                         for doc in term_posting_list:
-                            # print(doc, item)
                             # if the doc ID we are looking is greater than the item, skip the rest and move on
                             if(doc[0] > item[0]):
                                 break
 
                             # (docID, log_idf, [pos])
                             if(item[0] == doc[0]):
-                                # print(doc, item)
                                 # Create iterators for both lists to compare
                                 last_round_iter = iter(item[2])
                                 posting_iter = iter(doc[2])
@@ -312,11 +310,10 @@ class PhrasalQuery(Query):
                                     elif(last_round > posting):
                                         posting = next(posting_iter, None)
 
-                                    if(next(posting_iter, None) is None or next(last_round_iter, None) is None):
+                                    if(posting is None or last_round is None):
                                         break
                     
                     # print("results_to_return", sum(map(lambda x: len(x[2]), results_to_return)))
-                    # print("results_to_return", results_to_return)
                     if(results_to_return == []):
                         return []
                     else:
@@ -326,9 +323,10 @@ class PhrasalQuery(Query):
                 if previous_phrase_results == []:
                     return []
 
+        # print("after", previous_phrase_results)
         #Score calculation based on relevant docs
         relevant_docs = list(map(lambda x: x[0], previous_phrase_results))
-        print('previous: ', relevant_docs)
+        # print('previous: ', relevant_docs)
         scores = {}
         for idx, term in enumerate(terms):
             # if term not in dictionary, ignore that term
