@@ -339,6 +339,8 @@ class PhrasalQuery(Query):
                 ## Calculate query weight
                 query_weight = query_logtf_dic[term] * math.log(num_of_docs/dictionary[term][0]) ##logtf * idf
                 for doc in term_posting_list:
+                    if doc[0] not in relevant_docs: ## skip docs that are not relevant
+                        continue
                     if doc[0] not in scores:
                         scores[doc[0]] = 0
                     scores[doc[0]] += query_weight * doc[1] ## scores[docid] += queryweight * docweight
@@ -358,7 +360,7 @@ class PhrasalQuery(Query):
             scores[did] += court_value
 
             #if the phrase equals a court, add to the score of all docs from that court
-            if Query in courts:
+            if self.query_string in courts:
                 if did not in docs_with_court_queries_found:
                     docs_with_court_queries_found.append(did)
                     scores[did]  = scores[did] * 1.3
