@@ -106,7 +106,7 @@ def query_parser(line):
                     temp_phrasal_words = ''
 
                 else:
-                    temp_phrasal_words += token[:-1]
+                    temp_phrasal_words += token + ' '
 
             elif not is_searching_for_phrasal and token[0] != '"' and token[-1] != '"' and token != 'AND': # must be a single free text query:
                 print("is_boolean_query_on ", is_boolean_query_on)
@@ -209,8 +209,6 @@ class BooleanQuery(Query):
         second_results = self.second_query.evaluate_query()
         first_results_in_ids = list(map(lambda x: x[1], first_results))
         second_results_in_ids = list(map(lambda x: x[1], second_results))
-
-        print(second_results_in_ids)
 
         result = {}
         for k, v in first_results + second_results:
