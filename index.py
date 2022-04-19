@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 import re
 #import requests
+import math
 import nltk
 import sys
 import getopt
@@ -8,7 +9,6 @@ import csv
 import string
 import time
 import vbcode
-from index_helper import *
 from translator import britishize
 from tqdm import tqdm
 from collections import defaultdict
@@ -102,7 +102,7 @@ def build_index(in_file, out_dict, out_postings):
         text = regex.sub('',text)
         
         # Remove punctuations
-        text = text.translate(None, string.punctuation)
+        text = text.translate(str.maketrans('', '', string.punctuation))
         
         # Standardize to british english
         text = britishize(text)
