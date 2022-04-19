@@ -12,6 +12,8 @@ import itertools
 import sys
 from distutils.core import run_setup
 from translator import britishize
+from vbcode import VBDecode
+from setup import setup_dependencies
 
 nltk.data.path.append("./nltk_data")
 
@@ -38,8 +40,6 @@ def run_search(dict_file, postings_file, queries_file, results_file):
     @param results_file [string]: name/path of the results file provided by user
     """
     print('running search on the queries...')
-    run_setup('gensim-4.1.2/setup.py', script_args='install')
-
     global posting_file
     results_file = open(results_file, 'w')
     dict_file = open(dict_file, 'rb')
@@ -140,7 +140,7 @@ def process_query(queries_file, posting_file, results_file):
         print("Query string: ", query.query_string, "\nAnd Results: ", results, '\n')
 
         if(results != None):
-            results_file.write(' '.join(list(map(lambda x: x[1], results))) + "\n")
+            results_file.write(' '.join(list(map(str, results))) + "\n")
         else:
             results_file.write("\n")
 
@@ -289,8 +289,7 @@ class PhrasalQuery(Query):
                                         if(len(results_to_return) == 0 or results_to_return[-1][0] != item[0]):
                                             results_to_return.append(item)
                                         else:
-                                            results_to_return[-1][1] += 1
-                                            results_to_return[-1][2].append(last_round)
+                                            results_to_return[-1] = (posting, results_to_return[-1][1] + 1, results_to_return[-1][2] + [last_round])
                                         last_round = next(last_round_iter, None)
                                         posting = next(posting_iter, None)
                                     elif(last_round < posting):
@@ -298,7 +297,7 @@ class PhrasalQuery(Query):
                                     elif(last_round > posting):
                                         posting = next(posting_iter, None)
 
-                                    if(next(posting_iter, None) is None or next(last_round, None) is None):
+                                    if(next(posting_iter, None) is None or next(last_round_iter, None) is None):
                                         break
 
                     # print(results_to_return)
@@ -452,4 +451,5 @@ if dictionary_file == None or postings_file == None or file_of_queries == None o
     usage()
     sys.exit(2)
 
+setup_dependencies()
 run_search(dictionary_file, postings_file, file_of_queries, file_of_output)
