@@ -12,6 +12,7 @@ import itertools
 import sys
 
 from regex import E
+from bm25 import bm25
 from model_request import request_for_sim_words
 from translator import britishize
 from vbcode import VBDecode
@@ -194,14 +195,15 @@ class Query:
 
         full_terms_list = []
         for i in range(len(terms)):
-            terms_to_return = None
+            terms_to_return = []
             if(len(wordnet_terms[i]) <= 1):
                 terms_to_return = list(wordnet_terms[i]) if len(wordnet_terms[i]) > 0 else list()
             else:
                 terms_to_return = [list(wordnet_terms[i])[0]]
 
             if(type(word2vec_terms[i]) is str or len(word2vec_terms[i]) <= 1):
-                terms_to_return.append(word2vec_terms[i].translate(str.maketrans('', '', string.punctuation)))
+                if word2vec_terms[i] != []:
+                    terms_to_return.append(word2vec_terms[i].translate(str.maketrans('', '', string.punctuation)))
                 full_terms_list.append(terms_to_return)
             else:
                 terms_to_return.append(word2vec_terms[i][0].translate(str.maketrans('', '', string.punctuation)))
@@ -287,11 +289,14 @@ class FreeTextQuery(Query):
                 for doc in term_posting_list:
                     if doc[0] not in scores:
                         scores[doc[0]] = 0
-                    scores[doc[0]] += query_weight * doc[1] ## scores[docid] += queryweight * docweight
+                        
+                    # original scoring method:
+                    # scores[doc[0]] += query_weight * doc[1] ## scores[docid] += queryweight * docweight
+                    scores[doc[0]] += bm25(dictionary[term][0], doc_lengths_dict[doc[0]], doc[1])
                     relevant_docs.append(doc[0])
         # Normalize
-        for i in relevant_docs:
-            scores[i] = scores[i] / doc_lengths_dict[i]
+        # for i in relevant_docs:
+        #     scores[i] = scores[i] / doc_lengths_dict[i]
 
         # Add court score
         ptr = dictionary['DOC_COURT'] # pointer to another dictionary
@@ -448,7 +453,6 @@ def log_frequency_weight(query_tf):
         return 0
     else:
         return 1 + math.log(query_tf, 10)
-
 
 def decompress_posting(compressed_posting):
     """
