@@ -10,7 +10,6 @@ from nltk.stem import PorterStemmer
 from nltk.wsd import lesk
 import itertools
 import sys
-from distutils.core import run_setup
 from model_request import request_for_sim_words
 from translator import britishize
 from vbcode import VBDecode
@@ -33,7 +32,7 @@ def usage():
     print("usage: " +
           sys.argv[0] + " -d dictionary-file -p postings-file -q file-of-queries -o output-file-of-results")
 
-def default_dict_def():
+def default_dict_lambda():
     return [0, []]
 
 def run_search(dict_file, postings_file, queries_file, results_file):

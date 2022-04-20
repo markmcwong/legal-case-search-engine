@@ -18,7 +18,7 @@ import pickle
 DELTA_COMPRESSION = True
 VB_COMPRESSION = True
 
-def defaultdict_lambda():
+def default_dict_lambda():
     return [0, []]
 
 def usage():
@@ -81,7 +81,7 @@ def build_index(in_file, out_dict, out_postings):
     #print(N)
     
     # Initialize dictionary
-    dictionary = defaultdict(defaultdict_lambda)
+    dictionary = defaultdict(default_dict_lambda)
     dictionary['DOC_LENGTH'] = {}
     
     # debugging
@@ -114,7 +114,7 @@ def build_index(in_file, out_dict, out_postings):
         text = text.replace("'","")
         
         # Initialize term frequency map to store term frequency and a list of positions
-        freq_map = defaultdict(defaultdict_lambda)
+        freq_map = defaultdict(default_dict_lambda)
         
         # Initialize term position
         pos = 0
