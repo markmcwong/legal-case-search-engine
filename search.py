@@ -194,14 +194,15 @@ class Query:
 
         full_terms_list = []
         for i in range(len(terms)):
-            terms_to_return = None
+            terms_to_return = []
             if(len(wordnet_terms[i]) <= 1):
                 terms_to_return = list(wordnet_terms[i]) if len(wordnet_terms[i]) > 0 else list()
             else:
                 terms_to_return = [list(wordnet_terms[i])[0]]
 
             if(type(word2vec_terms[i]) is str or len(word2vec_terms[i]) <= 1):
-                terms_to_return.append(word2vec_terms[i].translate(str.maketrans('', '', string.punctuation)))
+                if word2vec_terms[i] != []:
+                    terms_to_return.append(word2vec_terms[i].translate(str.maketrans('', '', string.punctuation)))
                 full_terms_list.append(terms_to_return)
             else:
                 terms_to_return.append(word2vec_terms[i][0].translate(str.maketrans('', '', string.punctuation)))
