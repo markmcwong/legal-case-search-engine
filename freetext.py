@@ -83,8 +83,8 @@ def query_parser(line):
         print("Converted phrasal query to free text query:", line)
 
     if 'AND' in line: # Convert boolean query to freetext query
-        before, after = line.split(" AND ")
-        query = before + ' ' + after
+        termlist = line.split(" AND ")
+        query = ' '.join([t for t in termlist])
         query = FreeTextQuery(query)
         print("Boolean query converted to free text query:", query)
         return query
