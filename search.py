@@ -12,6 +12,7 @@ import itertools
 import sys
 
 from regex import E
+from bm25 import bm25
 from model_request import request_for_sim_words
 from translator import britishize
 from vbcode import VBDecode
@@ -285,11 +286,14 @@ class FreeTextQuery(Query):
                 for doc in term_posting_list:
                     if doc[0] not in scores:
                         scores[doc[0]] = 0
-                    scores[doc[0]] += query_weight * doc[1] ## scores[docid] += queryweight * docweight
+                        
+                    # original scoring method:
+                    # scores[doc[0]] += query_weight * doc[1] ## scores[docid] += queryweight * docweight
+                    scores[doc[0]] += bm25(dictionary[term][0], doc_lengths_dict[doc[0]], doc[1])
                     relevant_docs.append(doc[0])
         # Normalize
-        for i in relevant_docs:
-            scores[i] = scores[i] / doc_lengths_dict[i]
+        # for i in relevant_docs:
+        #     scores[i] = scores[i] / doc_lengths_dict[i]
 
         # Add court score
         ptr = dictionary['DOC_COURT'] # pointer to another dictionary
