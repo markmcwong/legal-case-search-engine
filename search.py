@@ -15,7 +15,7 @@ nltk.data.path.append("./nltk_data")
 
 ps = PorterStemmer()
 # global variable to hold the total number of documents indexed/searching through
-num_of_docs = 100
+num_of_docs = 17137
 # dictionary terms and offset values(pointers) to be held in memory
 dictionary = {}
 # initialise pointers to files

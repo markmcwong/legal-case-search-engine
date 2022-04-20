@@ -20,7 +20,7 @@ nltk.data.path.append("./nltk_data")
 
 ps = PorterStemmer()
 # global variable to hold the total number of documents indexed/searching through
-num_of_docs = 100
+num_of_docs = 17137
 # dictionary terms and offset values(pointers) to be held in memory
 dictionary = {}
 # list of all doc_id's that have been searched for when a court was in a phrasal query
