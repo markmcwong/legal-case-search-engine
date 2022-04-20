@@ -40,6 +40,7 @@ def evaluate(correctList, actualResult):
     precisionList = []
     recallList = []
     MAPList = []
+    AF2List = []
     for x in range(len(actualResult)):
         result = int(actualResult[x])
         if result in correctSet:
@@ -50,12 +51,17 @@ def evaluate(correctList, actualResult):
             recallList.append(recall)
             F2List.append((5*precision*recall)/(5*precision + recall))
             AF2 = statistics.mean(F2List)
+            AF2List.append(AF2)
             print("Position: " + str(x))
             print("AF2: " + str(AF2))
             precision = statistics.mean(precisionList)
             print("MAP: " + str(precision))
+            MAPList.append(precision)
             print("R-precision: " + str(precision))
             print("===================")
+    print("Average AF2: ", sum(AF2List) / len(AF2List))
+    print("Average MAP: ", sum(MAPList) / len(MAPList))
+    
     plt.plot(recallList, precisionList)
     # naming the x axis
     plt.xlabel('Recall')
