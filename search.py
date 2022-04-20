@@ -447,33 +447,6 @@ def log_frequency_weight(query_tf):
     else:
         return 1 + math.log(query_tf, 10)
 
-
-def update_score(posting_list, query_tf, scores, weights, df):
-    """
-    Takes in a posting list and update the score for each document
-    Posting List structure:
-    {"df": int, "postings": [(docID, weighted_tf), (docID, weighted_tf), ...]}
-    @param posting_list [dictionary]: all postings for a given term, {key = term, value = list of postings}
-    @param query_tf [int]: frequency of a given term
-    @param scores [dictionary]: scores for all relevant docIDs
-    @param weights [dictionary]: weights of all relevant docIDs
-    """
-    # print(posting_list, '\n', df, query_tf)
-    for doc in posting_list:
-        # extract both values from tuple (docID, weighted_tf)
-        doc_ID, doc_length, doc_pos = doc
-
-        # Check if doc_ID is already in scores or weights, if not initalise to 0
-        if doc_ID not in weights:
-            weights[doc_ID] = 0
-        if doc_ID not in scores:
-            scores[doc_ID] = 0
-
-        query_weight = log_frequency_weight(query_tf) * idf_weight(df)
-        doc_weight = 1
-        # doc_weight = doc_weighted_tf # no calculation needed as it is already weighted during indexing step
-        scores[doc_ID] += (query_weight * doc_weight)
-
 def decompress_posting(compressed_posting):
     """
     Decompress the posting list read from disk (which was compressed using variable byte encoding, and delta compression)
