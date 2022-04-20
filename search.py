@@ -12,6 +12,7 @@ import itertools
 import sys
 
 from regex import E
+from bm25 import bm25
 from model_request import request_for_sim_words
 from translator import britishize
 from vbcode import VBDecode
@@ -185,6 +186,7 @@ class Query:
         self.is_query_expanded = is_query_expanded
 
     def query_expansion(self, terms):
+        # Expand terms in query using wordnet and word2vec
         wordnet_terms = wordnet_expansion(self.query_string.split())
         wordnet_terms = [[ps.stem(term) for term in terms] for terms in wordnet_terms]
         word2vec_terms = text_preprocessing(self.query_string)
@@ -193,14 +195,15 @@ class Query:
 
         full_terms_list = []
         for i in range(len(terms)):
-            terms_to_return = None
+            terms_to_return = []
             if(len(wordnet_terms[i]) <= 1):
                 terms_to_return = list(wordnet_terms[i]) if len(wordnet_terms[i]) > 0 else list()
             else:
                 terms_to_return = [list(wordnet_terms[i])[0]]
 
             if(type(word2vec_terms[i]) is str or len(word2vec_terms[i]) <= 1):
-                terms_to_return.append(word2vec_terms[i].translate(str.maketrans('', '', string.punctuation)))
+                if word2vec_terms[i] != []:
+                    terms_to_return.append(word2vec_terms[i].translate(str.maketrans('', '', string.punctuation)))
                 full_terms_list.append(terms_to_return)
             else:
                 terms_to_return.append(word2vec_terms[i][0].translate(str.maketrans('', '', string.punctuation)))
@@ -219,7 +222,7 @@ class Query:
         query_logtf_dic = {term: 1 + math.log(list(terms).count(term), 10) for term in terms}
 
         if(self.is_query_expanded):
-            expanded_terms = list(itertools.chain.from_iterable(self.query_expansion(terms))) # temporarily remove query expansion
+            expanded_terms = list(itertools.chain.from_iterable(self.query_expansion(terms))) 
             expanded_terms = text_preprocessing(' '.join(expanded_terms))
             print("query expansion returned terms: ", expanded_terms)
             concatenated_terms = list(expanded_terms + terms)
@@ -232,7 +235,7 @@ class Query:
         if(type(self) == BooleanQuery):
             return type(self).generate_results(self) 
         else:
-            ## Phrasal query
+            # Phrasal query
             return type(self).generate_results(self, query_logtf_dic)
 
     def generate_results(self): # Parent method that should be overridden by child classes
@@ -259,9 +262,10 @@ class BooleanQuery(Query):
         result = {}
         for k, v in first_results + second_results:
             result[v] = (result.get(v, 0) + k)
-
+        
         # overlapped = {k:v for k,v in result.items() if k in first_results_in_ids and k in second_results_in_ids}
-        results_to_return = sorted(((val, did) for did, val in result.items()), reverse = True)
+        results_to_return = sorted(((val, did) for did, val in result.items()), reverse =
+        True) # currently not a strict intersection
         return results_to_return
 
 COURT_HIERARCHY = {'SG Court of Appeal': 2, 'SG Privy Council': 2, 'UK House of Lords': 2, 'UK Supreme Court': 2, 'High Court of Australia': 2, 'CA Supreme Court': 2, 'SG High Court': 1, 'Singapore International Commercial Court': 1, 'HK High Court': 1, 'HK Court of First Instance': 1, 'UK Crown Court': 1, 'UK Court of Appeal': 1, 'UK High Court': 1, 'Federal Court of Australia': 1, 'NSW Court of Appeal': 1, 'NSW Court of Criminal Appeal': 1, 'NSW Supreme Court': 1}
@@ -285,11 +289,14 @@ class FreeTextQuery(Query):
                 for doc in term_posting_list:
                     if doc[0] not in scores:
                         scores[doc[0]] = 0
-                    scores[doc[0]] += query_weight * doc[1] ## scores[docid] += queryweight * docweight
+                        
+                    # original scoring method:
+                    # scores[doc[0]] += query_weight * doc[1] ## scores[docid] += queryweight * docweight
+                    scores[doc[0]] += bm25(dictionary[term][0], doc_lengths_dict[doc[0]], doc[1])
                     relevant_docs.append(doc[0])
         # Normalize
-        for i in relevant_docs:
-            scores[i] = scores[i] / doc_lengths_dict[i]
+        # for i in relevant_docs:
+        #     scores[i] = scores[i] / doc_lengths_dict[i]
 
         # Add court score
         ptr = dictionary['DOC_COURT'] # pointer to another dictionary
@@ -447,36 +454,12 @@ def log_frequency_weight(query_tf):
     else:
         return 1 + math.log(query_tf, 10)
 
-
-def update_score(posting_list, query_tf, scores, weights, df):
-    """
-    Takes in a posting list and update the score for each document
-    Posting List structure:
-    {"df": int, "postings": [(docID, weighted_tf), (docID, weighted_tf), ...]}
-    @param posting_list [dictionary]: all postings for a given term, {key = term, value = list of postings}
-    @param query_tf [int]: frequency of a given term
-    @param scores [dictionary]: scores for all relevant docIDs
-    @param weights [dictionary]: weights of all relevant docIDs
-    """
-    # print(posting_list, '\n', df, query_tf)
-    for doc in posting_list:
-        # extract both values from tuple (docID, weighted_tf)
-        doc_ID, doc_length, doc_pos = doc
-
-        # Check if doc_ID is already in scores or weights, if not initalise to 0
-        if doc_ID not in weights:
-            weights[doc_ID] = 0
-        if doc_ID not in scores:
-            scores[doc_ID] = 0
-
-        query_weight = log_frequency_weight(query_tf) * idf_weight(df)
-        doc_weight = 1
-        # doc_weight = doc_weighted_tf # no calculation needed as it is already weighted during indexing step
-        scores[doc_ID] += (query_weight * doc_weight)
-
 def decompress_posting(compressed_posting):
     """
-    Decompress the posting list read from disk (which was compressed using variable byte encoding, and delta compression)
+    Decompress the posting list read from disk (which was compressed using variable byte 
+    encoding, and delta compression)
+    
+    @param compressed_posting [list]: posting list in compressed form
     """
     decompressed_posting = []
     for tuple in compressed_posting:
@@ -486,7 +469,10 @@ def decompress_posting(compressed_posting):
 
 def decompress(compressed_tuple):
     """
-    Decompress the tuple inside posting list read from disk (which was compressed using variable byte encoding, and delta compression)
+    Decompress the tuple inside posting list read from disk (which was compressed
+    using variable byte encoding, and delta compression)
+    
+    @param compressed_tuple [tuple]: a tuple in posting list that is in compressed form
     """
     docID = VBDecode(compressed_tuple[0])[0]
     log_tf = VBDecode(compressed_tuple[1])[0]
@@ -497,6 +483,7 @@ def decompress(compressed_tuple):
 def from_deltas(deltas):
     """
     Convert a list of delta numbers(difference between numbers) to the actual list of numbers
+    @param deltas [list]: list of integers representing positional index differences
     """
     if not deltas:
         return deltas
