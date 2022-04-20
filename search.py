@@ -10,6 +10,11 @@ from nltk.stem import PorterStemmer
 from nltk.wsd import lesk
 import itertools
 import sys
+from distutils.core import run_setup
+from model_request import request_for_sim_words
+from translator import britishize
+from vbcode import VBDecode
+from setup import setup_dependencies
 
 nltk.data.path.append("./nltk_data")
 
@@ -18,14 +23,18 @@ ps = PorterStemmer()
 num_of_docs = 17137
 # dictionary terms and offset values(pointers) to be held in memory
 dictionary = {}
+# list of all doc_id's that have been searched for when a court was in a phrasal query
+# these are stored so their scores are not accidentally increased twice
+docs_with_court_queries_found = []
 # initialise pointers to files
-dictionary_file = postings_file = file_of_queries = output_file_of_results = posting_file = word2vec_model = None
-file_court_combinations_found = {} #docID, court
+dictionary_file = postings_file = file_of_queries = output_file_of_results = posting_file = word2vec_model = doc_lengths_dict = None
 
 def usage():
     print("usage: " +
           sys.argv[0] + " -d dictionary-file -p postings-file -q file-of-queries -o output-file-of-results")
 
+def default_dict_def():
+    return [0, []]
 
 def run_search(dict_file, postings_file, queries_file, results_file):
     """
@@ -37,7 +46,6 @@ def run_search(dict_file, postings_file, queries_file, results_file):
     @param results_file [string]: name/path of the results file provided by user
     """
     print('running search on the queries...')
-
     global posting_file
     results_file = open(results_file, 'w')
     dict_file = open(dict_file, 'rb')
@@ -49,20 +57,18 @@ def run_search(dict_file, postings_file, queries_file, results_file):
     process_query(queries_file, posting_file, results_file)
 
 
-def text_preprocessing(file_content):
+def text_preprocessing(query):
     """
-    Process the text provided by tokenizing, stemming/lower casing, and removing terms
-    that are only punctuation
-    @param file_content [string]: original text read from file
+    Process the text provided by tokenizing, stemming/lower casing, and standerising to British English
+    @param file_content [string]: original query text
     @return [string]: a list of word processed tokens
     """
-    content_in_tokens = nltk.word_tokenize(file_content)
+    content_in_tokens = nltk.word_tokenize(query)
     stemmed_lowered_tokens = [ps.stem(token.lower())
                               for token in content_in_tokens]
-    stemmed_lowered_tokens_without_punc = [token for token in stemmed_lowered_tokens if not(
-        all(char in string.punctuation for char in token))]
-    return stemmed_lowered_tokens_without_punc
-
+    stemmed_lowered_tokens_britishized = [britishize(token)
+                              for token in stemmed_lowered_tokens]
+    return stemmed_lowered_tokens_britishized
 
 # process each query (each line) in queries_file and post the results to results_file
 # one line query = one line results (max 10 docIDs)
@@ -101,7 +107,7 @@ def query_parser(line):
                     temp_phrasal_words = ''
 
                 else:
-                    temp_phrasal_words += token[:-1]
+                    temp_phrasal_words += token + ' '
 
             elif not is_searching_for_phrasal and token[0] != '"' and token[-1] != '"' and token != 'AND': # must be a single free text query:
                 print("is_boolean_query_on ", is_boolean_query_on)
@@ -137,35 +143,32 @@ def process_query(queries_file, posting_file, results_file):
     for line in lines:  # for each query
         query = query_parser(line.strip())
         results = query.evaluate_query()
-        print("Query string: ", query.query_string, "\nAnd Results: ", results, '\n')
+        print("Query string: ", query.query_string, '\n')
 
         if(results != None):
-            results_file.write(' '.join(list(map(lambda x: x[0], results))) + "\n")
+            results_file.write(' '.join(list(map(lambda x: str(x[1]), results))) + "\n")
         else:
             results_file.write("\n")
 
 def wordnet_expansion(sentence_in_tokens):
     sentence_with_nltk_pos = [lesk(sentence_in_tokens, token) for token in sentence_in_tokens]
-    synonyms = [set([str(ps.stem(lemma.name())) for lemma in word.lemmas()]) for word in sentence_with_nltk_pos if word is not None]
+    synonyms = [set([str(lemma.name()) for lemma in word.lemmas() if '_' not in lemma.name()]) if word is not None else {} for word in sentence_with_nltk_pos ]
+    # print(synonyms)
     return synonyms
 
-
-# to be run after all other scores are processed
-# this should add some arbitrary value to all docs from a court
-#  contained in a phrasal query
-def update_scores_of_docs_with_court_queries():
-    for key in file_court_combinations_found:
-        scores[key] = scores[key] * 1.1
-
-
 def word2vec_expansion(sentence_in_tokens):
-    global word2vec_model
-    if word2vec_model is None:
-        from gensim.models import KeyedVectors
-        word2vec_model = KeyedVectors.load("vectors.kv")
+    # global word2vec_model
+    # if word2vec_model is None:
+    #     from gensim.models import KeyedVectors
+    #     word2vec_model = KeyedVectors.load("vectors.kv")
 
+    # expanded_terms = [word2vec_model.most_similar(token)[:5] if token in word2vec_model else token for token in sentence_in_tokens]
+    # print(sentence_in_tokens)
+    # print(expanded_terms)
 
-    return [map(lambda x: ps.stem(x[0]), word2vec_model.most_similar(token)[:3]) for token in sentence_in_tokens]
+    res = request_for_sim_words(sentence_in_tokens)
+    return res
+
 class Query:
     def __init__(self, query_string, is_query_expanded = False):
         self.query_string = query_string
@@ -173,22 +176,44 @@ class Query:
         self.is_query_expanded = is_query_expanded
 
     def query_expansion(self, terms):
-        return wordnet_expansion(terms) + word2vec_expansion(terms)
+        wordnet_terms = wordnet_expansion(self.query_string.split())
+        wordnet_terms = [[ps.stem(term) for term in terms] for terms in wordnet_terms]
+        word2vec_terms = text_preprocessing(self.query_string)
+        word2vec_terms = word2vec_expansion(word2vec_terms)
+        word2vec_terms = [[term[0] for term in terms] for terms in word2vec_terms]
+
+        full_terms_list = [terms]
+        for i in range(len(terms)):
+            terms_to_return = set(list(wordnet_terms[i])[:1])
+
+            if(type(word2vec_terms[i]) is str):
+                terms_to_return.add(word2vec_terms[i].translate(str.maketrans('', '', string.punctuation)))
+            else:
+                terms_to_return.add(word2vec_terms[i][0].translate(str.maketrans('', '', string.punctuation)))
+                intersection = set(list(wordnet_terms[i])) & set(word2vec_terms[i])         
+                terms_to_return = set.union(intersection, terms_to_return)
+                full_terms_list.append(terms_to_return)
+
+        return full_terms_list
 
     def evaluate_query(self):
-        if(self.is_query_expanded):
-            terms = text_preprocessing(self.query_string)
-            terms = set(itertools.chain.from_iterable(self.query_expansion(terms)))
-            print("query expansion returned terms: ", terms)
-            return set(map(lambda x: x[0], type(self).generate_results(self)))
+        terms = text_preprocessing(self.query_string)
+        # Create dictionary to store query log tf
+        query_logtf_dic = {term: 1 + math.log(list(terms).count(term), 10) for term in terms}
 
-        result = type(self).generate_results(self)
-        if result is None:
-            return []
+        if(self.is_query_expanded):
+            terms = list(itertools.chain.from_iterable(self.query_expansion(terms))) # temporarily remove query expansion
+            terms = set(text_preprocessing(' '.join(terms)))
+            print("query expansion returned terms: ", terms)
+            query_logtf_dic = {term: 1 + math.log(list(terms).count(term), 10) for term in terms}
+            # Create dictionary to store query log tf
+            return type(self).generate_results(self, terms, query_logtf_dic)
+
+        if(type(self) == BooleanQuery):
+            return type(self).generate_results(self)
         else:
-            if(type(self) == BooleanQuery):
-                return type(self).generate_results(self)
-            return set(map(lambda x: x[0], type(self).generate_results(self)))
+            ## Phrasal query
+            return type(self).generate_results(self, query_logtf_dic)
 
     def generate_results(self): # Parent method that should be overridden by child classes
         return []
@@ -208,32 +233,67 @@ class BooleanQuery(Query):
     def generate_results(self):
         first_results = self.first_query.evaluate_query()
         second_results = self.second_query.evaluate_query()
-        # print(self.query_string, "first_results: ", first_results, " second_results: ", second_results, first_results & second_results)
-        return first_results & second_results
+        first_results_in_ids = list(map(lambda x: x[1], first_results))
+        second_results_in_ids = list(map(lambda x: x[1], second_results))
 
+        result = {}
+        for k, v in first_results + second_results:
+            result[v] = (result.get(v, 0) + k)
+
+        overlapped = {k:v for k,v in result.items() if k in first_results_in_ids and k in second_results_in_ids}
+        results_to_return = sorted(((val, did) for did, val in overlapped.items()), reverse = True)
+        return results_to_return
+
+COURT_HIERARCHY = {'SG Court of Appeal': 2, 'SG Privy Council': 2, 'UK House of Lords': 2, 'UK Supreme Court': 2, 'High Court of Australia': 2, 'CA Supreme Court': 2, 'SG High Court': 1, 'Singapore International Commercial Court': 1, 'HK High Court': 1, 'HK Court of First Instance': 1, 'UK Crown Court': 1, 'UK Court of Appeal': 1, 'UK High Court': 1, 'Federal Court of Australia': 1, 'NSW Court of Appeal': 1, 'NSW Court of Criminal Appeal': 1, 'NSW Supreme Court': 1}
 
 class FreeTextQuery(Query):
     def __init__(self, query_string):
         super().__init__(query_string, is_query_expanded = True)
 
-    def generate_results(self):
-        terms = text_preprocessing(self.query_string)
-        results_to_return = []
+    def generate_results(self, terms, query_logtf_dic):
+        scores = {}
+        relevant_docs = []
         for idx, term in enumerate(terms):
             # if term not in dictionary, ignore that term
             if term in dictionary:
                 posting_file.seek(int(dictionary[term][1]))
                 term_posting_list = pickle.load(posting_file) # load term postings
+                term_posting_list = decompress_posting(term_posting_list) # Apply decompression
+                ## Calculate query weight
+                query_weight = query_logtf_dic[term] * math.log(num_of_docs/dictionary[term][0]) ##logtf * idf
                 for doc in term_posting_list:
-                    if doc not in results_to_return:
-                        results_to_return.append(doc)
+                    if doc[0] not in scores:
+                        scores[doc[0]] = 0
+                    scores[doc[0]] += query_weight * doc[1] ## scores[docid] += queryweight * docweight
+                    relevant_docs.append(doc[0])
+        # Normalize
+        for i in relevant_docs:
+            scores[i] = scores[i] / doc_lengths_dict[i]
+
+        # Add court score
+        ptr = dictionary['DOC_COURT'] # pointer to another dictionary
+        posting_file.seek(int(ptr))
+        court_dic = pickle.load(posting_file) # dictionary containing docid -> [court...] info
+        for did, val in scores.items(): # repeat for each document
+            courts = court_dic[str(did)]
+            # extract greatest court value
+            court_value = max([COURT_HIERARCHY[court] if court in COURT_HIERARCHY else 0 for court in courts])
+            # modify score to include court value
+            scores[did] += court_value
+
+
+        # Sort and return docs in ranked order
+        results_to_return = sorted(((val, did) for did, val in scores.items()), reverse = True)
+        print("number of docs returned: ", len(results_to_return))
         return results_to_return
+
+
 
 class PhrasalQuery(Query):
     def __init__(self, query_string):
             super().__init__(query_string)
 
-    def generate_results(self):
+    def generate_results(self, query_logtf_dic):
         terms = text_preprocessing(self.query_string)
         previous_phrase_results = []
         for idx, term in enumerate(terms):
@@ -242,6 +302,7 @@ class PhrasalQuery(Query):
             else:
                 posting_file.seek(int(dictionary[term][1]))
                 term_posting_list = pickle.load(posting_file)  # load term postings
+                term_posting_list = decompress_posting(term_posting_list) # apply decompression
                 if (idx == 0):
                     previous_phrase_results = term_posting_list
                     continue
@@ -262,16 +323,11 @@ class PhrasalQuery(Query):
                                 last_round = next(last_round_iter, None)
                                 posting = next(posting_iter, None)
 
-                                #check if the phrasal query is equal to the court of the doc
-                                if (Query == doc[1]):
-                                    file_court_combinations_found[doc[0]] = [doc[1]] # [docID, court]
-
                                 while True:
                                     if(last_round + 1 == posting):
                                         if(len(results_to_return) == 0 or results_to_return[-1][0] != item[0]):
-                                            results_to_return.append(item)
+                                            results_to_return.append((doc[0], doc[1], [posting]))
                                         else:
-                                            results_to_return[-1][1] += 1
                                             results_to_return[-1][2].append(last_round)
                                         last_round = next(last_round_iter, None)
                                         posting = next(posting_iter, None)
@@ -280,14 +336,62 @@ class PhrasalQuery(Query):
                                     elif(last_round > posting):
                                         posting = next(posting_iter, None)
 
-                                    if(next(posting_iter, None) is None or next(last_round, None) is None):
+                                    if(posting is None or last_round is None):
                                         break
+                    
+                    # print("results_to_return", sum(map(lambda x: len(x[2]), results_to_return)))
+                    if(results_to_return == []):
+                        return []
+                    else:
+                        previous_phrase_results = results_to_return
 
                     # print(results_to_return)
                 if previous_phrase_results == []:
-                    return
+                    return []
 
-        return previous_phrase_results
+        # print("after", previous_phrase_results)
+        #Score calculation based on relevant docs
+        relevant_docs = list(map(lambda x: x[0], previous_phrase_results))
+        # print('previous: ', relevant_docs)
+        scores = {}
+        for idx, term in enumerate(terms):
+            # if term not in dictionary, ignore that term
+            if term in dictionary:
+                posting_file.seek(int(dictionary[term][1]))
+                term_posting_list = pickle.load(posting_file) # load term postings
+                term_posting_list = decompress_posting(term_posting_list)
+                ## Calculate query weight
+                query_weight = query_logtf_dic[term] * math.log(num_of_docs/dictionary[term][0]) ##logtf * idf
+                for doc in term_posting_list:
+                    if doc[0] not in relevant_docs: ## skip docs that are not relevant
+                        continue
+                    if doc[0] not in scores:
+                        scores[doc[0]] = 0
+                    scores[doc[0]] += query_weight * doc[1] ## scores[docid] += queryweight * docweight
+        # Normalize
+        for i in relevant_docs:
+            scores[i] = scores[i] / doc_lengths_dict[i]
+
+        # Add court score
+        ptr = dictionary['DOC_COURT'] # pointer to another dictionary
+        posting_file.seek(ptr)
+        court_dic = pickle.load(posting_file) # dictionary containing docid -> [court...] info
+        for did, val in scores.items(): # repeat for each document
+            courts = court_dic[str(did)]
+            # extract greatest court value
+            court_value = max([COURT_HIERARCHY[court] if court in COURT_HIERARCHY else 0 for court in courts])
+            # modify score to include court value
+            scores[did] += court_value
+
+            #if the phrase equals a court, add to the score of all docs from that court
+            if self.query_string in courts:
+                if did not in docs_with_court_queries_found:
+                    docs_with_court_queries_found.append(did)
+                    scores[did]  = scores[did] * 1.3
+
+        # Sort and return docs in ranked order
+        results_to_return = sorted(((val, did) for did, val in scores.items()), reverse = True)
+        return results_to_return
 
 
 def build_dictionary(dict_file):
@@ -296,9 +400,10 @@ def build_dictionary(dict_file):
     line by line, very small overhead for search function
     @param dict_file [string]: name/path of the dictionary file
     """
-    global dictionary
+    global dictionary, doc_lengths_dict
     dictionary = pickle.load(dict_file)
-    # print(dictionary)
+    posting_file.seek(int(dictionary['DOC_LENGTH']))
+    doc_lengths_dict = pickle.load(posting_file)
 
 
 def idf_weight(doc_freq):
@@ -348,6 +453,38 @@ def update_score(posting_list, query_tf, scores, weights, df):
         # doc_weight = doc_weighted_tf # no calculation needed as it is already weighted during indexing step
         scores[doc_ID] += (query_weight * doc_weight)
 
+def decompress_posting(compressed_posting):
+    """
+    Decompress the posting list read from disk (which was compressed using variable byte encoding, and delta compression)
+    """
+    decompressed_posting = []
+    for tuple in compressed_posting:
+        decompressed_tuple = decompress(tuple)
+        decompressed_posting.append(decompressed_tuple)
+    return decompressed_posting
+
+def decompress(compressed_tuple):
+    """
+    Decompress the tuple inside posting list read from disk (which was compressed using variable byte encoding, and delta compression)
+    """
+    docID = VBDecode(compressed_tuple[0])[0]
+    log_tf = VBDecode(compressed_tuple[1])[0]
+    deltas = VBDecode(compressed_tuple[2])
+    pos_lst = from_deltas(deltas)
+    return (docID, log_tf, pos_lst)
+
+def from_deltas(deltas):
+    """
+    Convert a list of delta numbers(difference between numbers) to the actual list of numbers
+    """
+    if not deltas:
+        return deltas
+
+    numbers = [deltas[0]]
+    for i in deltas[1:]:
+        numbers.append(i + numbers[-1])
+    return numbers
+
 try:
     opts, args = getopt.getopt(sys.argv[1:], 'd:p:q:o:')
 except getopt.GetoptError:
@@ -370,4 +507,5 @@ if dictionary_file == None or postings_file == None or file_of_queries == None o
     usage()
     sys.exit(2)
 
+# setup_dependencies()
 run_search(dictionary_file, postings_file, file_of_queries, file_of_output)
