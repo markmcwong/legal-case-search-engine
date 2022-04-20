@@ -77,24 +77,24 @@ def query_parser(line):
     Create a query object that represent the queries requested by current line
     """
     # phrasal_words = re.findall(r'"(.+?)"', line)
-    if '"' in line or 'AND' in line:
+    if '"' in line or 'AND' in line: # phrasal or boolean queries are present
         queries_generated = []
         tokens = line.split()
         is_searching_for_phrasal = False
         is_boolean_query_on = False
         temp_phrasal_words = ''
         for token in tokens:
-            if token[0] == '"' and token[-1] == '"':
+            if token[0] == '"' and token[-1] == '"': # single term phrasal query
                 if(is_boolean_query_on):
                     queries_generated[-1].update_second_query(PhrasalQuery(token[1:-1]))
                 else:
                     queries_generated.append(PhrasalQuery(token[1:-1]))
 
-            elif token[0] == '"':
+            elif token[0] == '"': # multiple term phrasal query
                 is_searching_for_phrasal = True
                 temp_phrasal_words += token[1:] + ' '
 
-            elif is_searching_for_phrasal:
+            elif is_searching_for_phrasal: # multiple term phrasal query
                 if token[-1] == '"': # if the last character of token is closing quotation mark
                     is_searching_for_phrasal = False # switch off phrasal search
                     temp_phrasal_words += token[:-1]
@@ -150,12 +150,20 @@ def process_query(queries_file, posting_file, results_file):
             results_file.write("\n")
 
 def wordnet_expansion(sentence_in_tokens):
+    """
+    Given a list of tokens, expand each token using wordnet to generate synonyms.
+    @param sentence_in_tokens [list]: list of tokens forming a query sentence
+    """
     sentence_with_nltk_pos = [lesk(sentence_in_tokens, token) for token in sentence_in_tokens]
     synonyms = [set([str(lemma.name()) for lemma in word.lemmas() if '_' not in lemma.name()]) if word is not None else {} for word in sentence_with_nltk_pos ]
     # print(synonyms)
     return synonyms
 
 def word2vec_expansion(sentence_in_tokens):
+    """
+    Given a list of tokens, expand each token using word2vec to generate synonyms.
+    @param sentence_in_tokens [list]: list of tokens forming a query sentence
+    """
     # global word2vec_model
     # if word2vec_model is None:
     #     from gensim.models import KeyedVectors
