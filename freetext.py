@@ -109,25 +109,20 @@ def query_parser(line):
                     queries_generated[-1].update_second_query(PhrasalQuery(token[1:-1]))
                 else:
                     queries_generated.append(PhrasalQuery(token[1:-1]))
-
             elif token[0] == '"': # multiple term phrasal query
                 is_searching_for_phrasal = True
                 temp_phrasal_words += token[1:] + ' '
-
             elif is_searching_for_phrasal: # multiple term phrasal query
                 if token[-1] == '"': # if the last character of token is closing quotation mark
                     is_searching_for_phrasal = False # switch off phrasal search
                     temp_phrasal_words += token[:-1]
-
                     if(is_boolean_query_on):
                         queries_generated[-1].update_second_query(PhrasalQuery(temp_phrasal_words))
                     else:
                         queries_generated.append(PhrasalQuery(temp_phrasal_words))
                     temp_phrasal_words = ''
-
                 else:
                     temp_phrasal_words += token + ' '
-
             elif not is_searching_for_phrasal and token[0] != '"' and token[-1] != '"' and token != 'AND': # must be a single free text query:
                 print("is_boolean_query_on ", is_boolean_query_on)
                 if(is_boolean_query_on):
@@ -135,20 +130,17 @@ def query_parser(line):
                 else:
                     queries_generated.append(FreeTextQuery(token))
                 temp_phrasal_words = ''
-
             if token == 'AND':
                 is_boolean_query_on = True
                 queries_generated[-1] = BooleanQuery(queries_generated[-1].query_string, queries_generated[-1])
-
         print("Queries objects Generated (non free-text): ", queries_generated)
         return queries_generated[-1]
-
     else:
         # must be a free text query
         query = FreeTextQuery(line)
         print('Free text query generated:', query)
         return query
-       """ 
+       """
 
 def process_query(queries_file, posting_file, results_file):
     """
@@ -222,7 +214,7 @@ class Query:
                 terms_to_return.add(word2vec_terms[i].translate(str.maketrans('', '', string.punctuation)))
             else:
                 terms_to_return.add(word2vec_terms[i][0].translate(str.maketrans('', '', string.punctuation)))
-                intersection = set(list(wordnet_terms[i])) & set(word2vec_terms[i])         
+                intersection = set(list(wordnet_terms[i])) & set(word2vec_terms[i])
                 terms_to_return = set.union(intersection, terms_to_return)
                 full_terms_list.append(terms_to_return)
 
@@ -242,7 +234,7 @@ class Query:
             return type(self).generate_results(self, terms, query_logtf_dic)
 
         if(type(self) == BooleanQuery):
-            return type(self).generate_results(self) 
+            return type(self).generate_results(self)
         else:
             ## Phrasal query
             return type(self).generate_results(self, query_logtf_dic)
@@ -283,25 +275,55 @@ class FreeTextQuery(Query):
         super().__init__(query_string, is_query_expanded = True)
 
     def generate_results(self, terms, query_logtf_dic):
-        scores = {}
-        relevant_docs = []
+        # Initialize the dictionary for storing normalized vectors for each documents that contain a particular query term
+        term_doc_dictionary = {}
+        # Store unique docIDs that contain at least one of the term in the query
+        candidates = set()
+        
+        # Initialize a dictionary to store the weighted vector for each term
+        query_term_vector = {}
+        
         for idx, term in enumerate(terms):
+            term_doc_dictionary[term] = {}
             # if term not in dictionary, ignore that term
             if term in dictionary:
                 posting_file.seek(int(dictionary[term][1]))
                 term_posting_list = pickle.load(posting_file) # load term postings
                 term_posting_list = decompress_posting(term_posting_list) # Apply decompression
                 ## Calculate query weight
-                query_weight = query_logtf_dic[term] * math.log(num_of_docs/dictionary[term][0]) ##logtf * idf
+                query_weight = query_logtf_dic[term] * dictionary[term][0] ##logtf * idf
+                query_term_vector[term] = query_weight
+                
                 for doc in term_posting_list:
-                    if doc[0] not in scores:
-                        scores[doc[0]] = 0
-                    scores[doc[0]] += query_weight * doc[1] ## scores[docid] += queryweight * docweight
-                    relevant_docs.append(doc[0])
-        # Normalize
-        for i in relevant_docs:
-            scores[i] = scores[i] / doc_lengths_dict[i]
-
+                    docID, log_tf = doc[0], doc[1]
+                    doc_length = doc_lengths_dict[docID]
+                    # Apply length normalization
+                    term_doc_dictionary[term][docID] = log_tf / doc_length
+                    candidates.add(docID)
+                    
+        # Initialize
+        ranking = {}
+    
+        for docID in candidates:
+            score = 0
+            
+            for idx, term in enumerate(terms):
+                # vector score will be 0 if the document does not contain the term, so just skip
+                if docID not in term_doc_dictionary[term]:
+                    continue
+                
+                else:
+                    # compute cosine similarity using dot product
+                    term_query_score = query_term_vector[term]
+                    term_doc_score = term_doc_dictionary[term][docID]
+                    cos_similarity = term_query_score * term_doc_score
+                    score += cos_similarity
+            
+            # Sort by decreasing order of the score and ascending order of docID for the same score
+            #heapq.heappush(pq, (score, -1 * int(docID)))
+            ranking[int(docID)] = score
+            
+        """
         # Add court score
         ptr = dictionary['DOC_COURT'] # pointer to another dictionary
         posting_file.seek(int(ptr))
@@ -312,10 +334,11 @@ class FreeTextQuery(Query):
             court_value = max([COURT_HIERARCHY[court] if court in COURT_HIERARCHY else 0 for court in courts])
             # modify score to include court value
             scores[did] += court_value
-
+        """
 
         # Sort and return docs in ranked order
-        results_to_return = sorted(((val, did) for did, val in scores.items()), reverse = True)
+        results_to_return = sorted(((val, did) for did, val in ranking.items()), reverse = True)
+        #results_to_return = map(lambda x: str(-1 * x[1]), list(item for _, _, item in pq)
         print("number of docs returned: ", len(results_to_return))
         return results_to_return
 
@@ -346,7 +369,7 @@ class PhrasalQuery(Query):
                             if(doc[0] > item[0]):
                                 break
 
-                            # (docID, log_idf, [pos])
+                            # (docID, log_tf, [pos])
                             if(item[0] == doc[0]):
                                 # Create iterators for both lists to compare
                                 last_round_iter = iter(item[2])
@@ -393,7 +416,7 @@ class PhrasalQuery(Query):
                 term_posting_list = pickle.load(posting_file) # load term postings
                 term_posting_list = decompress_posting(term_posting_list)
                 ## Calculate query weight
-                query_weight = query_logtf_dic[term] * math.log(num_of_docs/dictionary[term][0]) ##logtf * idf
+                query_weight = query_logtf_dic[term] * dictionary[term][0] ##logtf * idf
                 for doc in term_posting_list:
                     if doc[0] not in relevant_docs: ## skip docs that are not relevant
                         continue
