@@ -12,11 +12,14 @@ import vbcode
 from translator import britishize
 from tqdm import tqdm
 from collections import defaultdict
+import pickle
 
 # Turn on/off compression methods
 DELTA_COMPRESSION = True
 VB_COMPRESSION = True
 
+def defaultdict_lambda():
+    return [0, []]
 
 def usage():
     print("usage: " + sys.argv[0] + " -i directory-of-documents -d dictionary-file -p postings-file")
@@ -78,7 +81,7 @@ def build_index(in_file, out_dict, out_postings):
     #print(N)
     
     # Initialize dictionary
-    dictionary = defaultdict(lambda: [0, []])
+    dictionary = defaultdict(defaultdict_lambda)
     dictionary['DOC_LENGTH'] = {}
     
     # debugging
@@ -111,7 +114,7 @@ def build_index(in_file, out_dict, out_postings):
         text = text.replace("'","")
         
         # Initialize term frequency map to store term frequency and a list of positions
-        freq_map = defaultdict(lambda: [0, []])
+        freq_map = defaultdict(defaultdict_lambda)
         
         # Initialize term position
         pos = 0
