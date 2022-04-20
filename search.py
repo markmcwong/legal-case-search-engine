@@ -240,15 +240,15 @@ class BooleanQuery(Query):
     def generate_results(self):
         first_results = self.first_query.evaluate_query()
         second_results = self.second_query.evaluate_query()
-        first_results_in_ids = list(map(lambda x: x[1], first_results))
-        second_results_in_ids = list(map(lambda x: x[1], second_results))
+        # first_results_in_ids = list(map(lambda x: x[1], first_results))
+        # second_results_in_ids = list(map(lambda x: x[1], second_results))
 
         result = {}
         for k, v in first_results + second_results:
             result[v] = (result.get(v, 0) + k)
 
-        overlapped = {k:v for k,v in result.items() if k in first_results_in_ids and k in second_results_in_ids}
-        results_to_return = sorted(((val, did) for did, val in overlapped.items()), reverse = True)
+        # overlapped = {k:v for k,v in result.items() if k in first_results_in_ids and k in second_results_in_ids}
+        results_to_return = sorted(((val, did) for did, val in result.items()), reverse = True)
         return results_to_return
 
 COURT_HIERARCHY = {'SG Court of Appeal': 2, 'SG Privy Council': 2, 'UK House of Lords': 2, 'UK Supreme Court': 2, 'High Court of Australia': 2, 'CA Supreme Court': 2, 'SG High Court': 1, 'Singapore International Commercial Court': 1, 'HK High Court': 1, 'HK Court of First Instance': 1, 'UK Crown Court': 1, 'UK Court of Appeal': 1, 'UK High Court': 1, 'Federal Court of Australia': 1, 'NSW Court of Appeal': 1, 'NSW Court of Criminal Appeal': 1, 'NSW Supreme Court': 1}
