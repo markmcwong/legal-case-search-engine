@@ -187,6 +187,7 @@ def word2vec_expansion(sentence_in_tokens):
     # print(expanded_terms)
 
     res = request_for_sim_words(sentence_in_tokens)
+    # print(res)
     return res
 
 class Query:
@@ -202,21 +203,27 @@ class Query:
         word2vec_terms = word2vec_expansion(word2vec_terms)
         word2vec_terms = [[term[0] for term in terms] for terms in word2vec_terms]
 
-        full_terms_list = [terms]
+        full_terms_list = []
         for i in range(len(terms)):
-            terms_to_return = None
+            terms_to_return = []
             if(len(wordnet_terms[i]) <= 1):
-                terms_to_return = set(list(wordnet_terms[i]))
+                terms_to_return = list(wordnet_terms[i]) if len(wordnet_terms[i]) > 0 else list()
             else:
-                terms_to_return = set([list(wordnet_terms[i])[0]])
+                terms_to_return = [list(wordnet_terms[i])[0]]
 
             if(type(word2vec_terms[i]) is str or len(word2vec_terms[i]) <= 1):
-                terms_to_return.add(word2vec_terms[i].translate(str.maketrans('', '', string.punctuation)))
-            else:
-                terms_to_return.add(word2vec_terms[i][0].translate(str.maketrans('', '', string.punctuation)))
-                intersection = set(list(wordnet_terms[i])) & set(word2vec_terms[i])
-                terms_to_return = set.union(intersection, terms_to_return)
+                if word2vec_terms[i] != []:
+                    terms_to_return.append(word2vec_terms[i].translate(str.maketrans('', '', string.punctuation)))
                 full_terms_list.append(terms_to_return)
+            else:
+                terms_to_return.append(word2vec_terms[i][0].translate(str.maketrans('', '', string.punctuation)))
+                # terms_to_return.append(word2vec_terms[i][1].translate(str.maketrans('', '', string.punctuation)))
+                intersection = set(list(wordnet_terms[i])) & set(word2vec_terms[i])     
+                if(len(intersection) > 0):
+                    terms_to_return.extend(intersection)
+                full_terms_list.append(terms_to_return)
+
+            print(full_terms_list)
 
         return full_terms_list
 
@@ -226,12 +233,15 @@ class Query:
         query_logtf_dic = {term: 1 + math.log(list(terms).count(term), 10) for term in terms}
 
         if(self.is_query_expanded):
-            # terms = list(itertools.chain.from_iterable(self.query_expansion(terms))) # temporarily remove query expansion
-            # terms = set(text_preprocessing(' '.join(terms)))
+            expanded_terms = list(itertools.chain.from_iterable(self.query_expansion(terms))) 
+            expanded_terms = text_preprocessing(' '.join(expanded_terms))
             print("query expansion returned terms: ", terms)
-            query_logtf_dic = {term: 1 + math.log(list(terms).count(term), 10) for term in terms}
+            concatenated_terms = list(expanded_terms + terms)
+            query_logtf_dic = {term: (1 + math.log(list(concatenated_terms).count(term), 10) 
+                if term in terms else (1 + 0.1 * math.log(list(concatenated_terms).count(term), 10))) # 0.2 weight for expanded terms
+                for term in (expanded_terms + terms)}
             # Create dictionary to store query log tf
-            return type(self).generate_results(self, terms, query_logtf_dic)
+            return type(self).generate_results(self, terms, expanded_terms, query_logtf_dic)
 
         if(type(self) == BooleanQuery):
             return type(self).generate_results(self)
@@ -274,7 +284,7 @@ class FreeTextQuery(Query):
     def __init__(self, query_string):
         super().__init__(query_string, is_query_expanded = True)
 
-    def generate_results(self, terms, query_logtf_dic):
+    def generate_results(self, terms, expanded_terms, query_logtf_dic):
         # Initialize the dictionary for storing normalized vectors for each documents that contain a particular query term
         term_doc_dictionary = {}
         # Store unique docIDs that contain at least one of the term in the query
@@ -283,7 +293,7 @@ class FreeTextQuery(Query):
         # Initialize a dictionary to store the weighted vector for each term
         query_term_vector = {}
         
-        for idx, term in enumerate(terms):
+        for idx, term in enumerate(terms + expanded_terms):
             term_doc_dictionary[term] = {}
             # if term not in dictionary, ignore that term
             if term in dictionary:
@@ -291,7 +301,8 @@ class FreeTextQuery(Query):
                 term_posting_list = pickle.load(posting_file) # load term postings
                 term_posting_list = decompress_posting(term_posting_list) # Apply decompression
                 ## Calculate query weight
-                query_weight = query_logtf_dic[term] * dictionary[term][0] ##logtf * idf
+                weight = 1 if term in terms else 0.2 # weightage adjustment for expanded terms vs original term in query
+                query_weight = query_logtf_dic[term] * dictionary[term][0] * weight ##logtf * idf
                 query_term_vector[term] = query_weight
                 
                 for doc in term_posting_list:
