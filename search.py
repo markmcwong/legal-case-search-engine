@@ -10,6 +10,8 @@ from nltk.stem import PorterStemmer
 from nltk.wsd import lesk
 import itertools
 import sys
+
+from regex import E
 from model_request import request_for_sim_words
 from translator import britishize
 from vbcode import VBDecode
@@ -191,9 +193,13 @@ class Query:
 
         full_terms_list = [terms]
         for i in range(len(terms)):
-            terms_to_return = set(list(wordnet_terms[i])[:1])
+            terms_to_return = None
+            if(len(wordnet_terms[i]) <= 1):
+                terms_to_return = set(list(wordnet_terms[i]))
+            else:
+                terms_to_return = set([list(wordnet_terms[i])[0]])
 
-            if(type(word2vec_terms[i]) is str):
+            if(type(word2vec_terms[i]) is str or len(word2vec_terms[i]) <= 1):
                 terms_to_return.add(word2vec_terms[i].translate(str.maketrans('', '', string.punctuation)))
             else:
                 terms_to_return.add(word2vec_terms[i][0].translate(str.maketrans('', '', string.punctuation)))
@@ -209,15 +215,15 @@ class Query:
         query_logtf_dic = {term: 1 + math.log(list(terms).count(term), 10) for term in terms}
 
         if(self.is_query_expanded):
-            terms = list(itertools.chain.from_iterable(self.query_expansion(terms))) # temporarily remove query expansion
-            terms = set(text_preprocessing(' '.join(terms)))
+            # terms = list(itertools.chain.from_iterable(self.query_expansion(terms))) # temporarily remove query expansion
+            # terms = set(text_preprocessing(' '.join(terms)))
             print("query expansion returned terms: ", terms)
             query_logtf_dic = {term: 1 + math.log(list(terms).count(term), 10) for term in terms}
             # Create dictionary to store query log tf
             return type(self).generate_results(self, terms, query_logtf_dic)
 
         if(type(self) == BooleanQuery):
-            return type(self).generate_results(self)
+            return type(self).generate_results(self) 
         else:
             ## Phrasal query
             return type(self).generate_results(self, query_logtf_dic)
