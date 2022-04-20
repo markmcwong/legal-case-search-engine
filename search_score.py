@@ -11,6 +11,7 @@ from nltk.wsd import lesk
 import itertools
 import sys
 from distutils.core import run_setup
+from model_request import request_for_sim_words
 from translator import britishize
 from vbcode import VBDecode
 from setup import setup_dependencies
@@ -156,15 +157,17 @@ def wordnet_expansion(sentence_in_tokens):
     return synonyms
 
 def word2vec_expansion(sentence_in_tokens):
-    global word2vec_model
-    if word2vec_model is None:
-        from gensim.models import KeyedVectors
-        word2vec_model = KeyedVectors.load("vectors.kv")
+    # global word2vec_model
+    # if word2vec_model is None:
+    #     from gensim.models import KeyedVectors
+    #     word2vec_model = KeyedVectors.load("vectors.kv")
 
-    expanded_terms = [word2vec_model.most_similar(token)[:5] if token in word2vec_model else token for token in sentence_in_tokens]
+    # expanded_terms = [word2vec_model.most_similar(token)[:5] if token in word2vec_model else token for token in sentence_in_tokens]
     # print(sentence_in_tokens)
     # print(expanded_terms)
-    return expanded_terms
+
+    res = request_for_sim_words(sentence_in_tokens)
+    return res
 
 class Query:
     def __init__(self, query_string, is_query_expanded = False):
@@ -174,23 +177,23 @@ class Query:
 
     def query_expansion(self, terms):
         wordnet_terms = wordnet_expansion(self.query_string.split())
+        wordnet_terms = [[ps.stem(term) for term in terms] for terms in wordnet_terms]
         word2vec_terms = text_preprocessing(self.query_string)
         word2vec_terms = word2vec_expansion(word2vec_terms)
-        # print(word2vec_model.most_similar('damage'))
+        word2vec_terms = [[term[0] for term in terms] for terms in word2vec_terms]
+
         full_terms_list = [terms]
         for i in range(len(terms)):
             terms_to_return = set(list(wordnet_terms[i])[:1])
-            # + [word2vec_terms[i][0][0]])
-            # terms_to_return = set()
-            # print(type(word2vec_terms[i][0]),word2vec_terms[i])
-            if(type(word2vec_terms[i]) is str):
-                terms_to_return.add(word2vec_terms[i])
-            else:
-                terms_to_return.add(word2vec_terms[i][0][0])
 
-            intersection = set(list(wordnet_terms[i])) & set(word2vec_terms[i][0])         
-            set.union(intersection, terms_to_return)
-            full_terms_list.append(terms_to_return)
+            if(type(word2vec_terms[i]) is str):
+                terms_to_return.add(word2vec_terms[i].translate(str.maketrans('', '', string.punctuation)))
+            else:
+                terms_to_return.add(word2vec_terms[i][0].translate(str.maketrans('', '', string.punctuation)))
+                intersection = set(list(wordnet_terms[i])) & set(word2vec_terms[i])         
+                terms_to_return = set.union(intersection, terms_to_return)
+                full_terms_list.append(terms_to_return)
+
         return full_terms_list
 
     def evaluate_query(self):
@@ -504,5 +507,5 @@ if dictionary_file == None or postings_file == None or file_of_queries == None o
     usage()
     sys.exit(2)
 
-setup_dependencies()
+# setup_dependencies()
 run_search(dictionary_file, postings_file, file_of_queries, file_of_output)
