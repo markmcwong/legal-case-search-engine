@@ -173,7 +173,6 @@ Average MAP: 0.2444116607
 
 ********************************
 
-
 == Files included with this submission ==
 
 List the files in your submission here and provide a short 1 line
@@ -188,13 +187,11 @@ and formatted correctly.
 - freetext.py - A version of the search engine treating everything as free text
 - search_test.py - A past version of the search engine which was used to test other search methods
 - index_helper.py -
-- bm25.py -
-- index_helper.py -
-- model_request.py -
-- query_expansion_experiments.py -
-- setup.py -
+- bm25.py - used for experiments with BM25 scoring method replacing TF-IDF
+- model_request.py - used for sending request to the heroku server for getting similar words in query expansions
+- query_expansion_experiments.py (commented out code) - used for experimenting with different query expansion techniques such as using Pretrained BERT / Glove model and NLPAug
 - translator.py - list of words used to translate American English to British English
-- vbcode.py -
+- vbcode.py - encoding and decoding methods for variable byte encoding
 - word2vec_model.py (commented out code) - used for creating the word2vec model trained on the legal corpus using gensim
 
 
