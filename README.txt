@@ -127,7 +127,7 @@ FreeTextQuery(Query), PhrasalQuery(Query), and BooleanQuery(Query)
 
  == Our Final Decisions on Search Methods ==
 
- 
+
 
 
 == Sorting according to Court Hierarchy ==
@@ -148,9 +148,9 @@ Our experimentation and results are discussed in Bonus.docx
 == Experimentation with Evaluation and Ranking Document Similarity:
 
   - BM25
-  We attempted to use BM25 score as the metric rather than TF-IDF, however the average MAP and MAF2 was lower in general across all three given examples 
-  as BM25 scores factor in the document length and the average length of all documents. It could possibly due to the fact that the document id provided 
-  by relevance feedback file has a longer document length in general and hence the scoring and rank is lower compared to TF-IDF. 
+  We attempted to use BM25 score as the metric rather than TF-IDF, however the average MAP and MAF2 was lower in general across all three given examples
+  as BM25 scores factor in the document length and the average length of all documents. It could possibly due to the fact that the document id provided
+  by relevance feedback file has a longer document length in general and hence the scoring and rank is lower compared to TF-IDF.
   Hence we decided not to replace TF-iDF with BM25 with our final implementation.
 
   - Doc2Vec and Word2Vec calculating Similarity
@@ -181,9 +181,21 @@ description of each file.  Make sure your submission's files are named
 and formatted correctly.
 
 - index.py - used for creating indexes for the files in the specified directory
-- search.py - used for performing query on the given query input file and store the results as a file
+- search.py - used for performing search on the given query input file and store the results as a file
 - dictionary.txt - used for storing the dictionary terms and their corresponding postings offset in the posting file
 - postings.txt - used for storing the document frequency and the list of every doc ID and its weighted term frequency that contains the term
+- Bonus.docx - A word document explaining our different approaches to query refinement
+- freetext.py - A version of the search engine treating everything as free text
+- search_test.py - A past version of the search engine which was used to test other search methods
+- index_helper.py -
+- bm25.py -
+- index_helper.py -
+- model_request.py -
+- query_expansion_experiments.py -
+- setup.py -
+- translator.py - list of words used to translate American English to British English
+- vbcode.py -
+- word2vec_model.py (commented out code) - used for creating the word2vec model trained on the legal corpus using gensim
 
 
 
