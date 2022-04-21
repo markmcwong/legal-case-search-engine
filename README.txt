@@ -145,6 +145,22 @@ While the average MAP increases, the average AF2 is still below the baseline. On
 == Evaluation of Search Performance ==
 Our experimentation and results are discussed in Bonus.docx
 
+== Experimentation with Evaluation and Ranking Document Similarity:
+
+  - BM25
+  We attempted to use BM25 score as the metric rather than TF-IDF, however the average MAP and MAF2 was lower in general across all three given examples 
+  as BM25 scores factor in the document length and the average length of all documents. It could possibly due to the fact that the document id provided 
+  by relevance feedback file has a longer document length in general and hence the scoring and rank is lower compared to TF-IDF. 
+  Hence we decided not to replace TF-iDF with BM25 with our final implementation.
+
+  - Doc2Vec and Word2Vec calculating Similarity
+  We have also attempted to use Doc2Vec and Word2Vec to calculate the similarity between the query and the documents in CSV.
+  For Word2Vec, we create the vectors that represents each document by averaging the sum of word vectors that represents each word of the documents,
+  and use cosine similarity to find the closest vectors for the query.
+
+  However due to the size limitation constraints and the large size of the generated model, while we would need to somehow determine a hard threshold to cut off the "not so irrelevant documents",
+  which is especially difficult with regards to boolean queries. We have not decided to further experiment with the Doc2Vec / Word2Vec calculating document similarity method.
+  Details in https://colab.research.google.com/drive/10oYY8Ko4V4RYfER0v2R571x9Umr-9cXd#scrollTo=wJaXk54lr3d8
 
 **** MOVE THESE TO BONUS *********
 ======= Baseline ========
@@ -196,10 +212,18 @@ Variable byte encoding:
 http://nlp.stanford.edu/IR-book/html/htmledition/variable-byte-codes-1.html
 https://github.com/utahta/pyvbcode/blob/master/vbcode.py
 
-Lesk Algorithm:
+Word2Vec/Doc2Vec for document similarity:
+https://www.kaggle.com/code/namansood/document-ranking-ir-system-word2vec-embeddings/notebook
+https://www.analyticsvidhya.com/blog/2020/08/information-retrieval-using-word2vec-based-vector-space-model/
 
-WordNet:
+Query Expansion:
+BERT and Glove model:
+https://colab.research.google.com/github/fastforwardlabs/ff14_blog/blob/master/_notebooks/2020-07-22-Improving_the_Retriever_on_Natural_Questions.ipynb#scrollTo=NolyNCP2Fsxy
+https://towardsdatascience.com/how-to-rank-text-content-by-semantic-similarity-4d2419a84c32
+https://stackoverflow.com/questions/59865719/how-to-find-the-closest-word-to-a-vector-using-bert
+https://huggingface.co/nlpaueb/legal-bert-base-uncased?text=quiet+%5BMASK%5D+call+from+the+defendant
 
 WAF2 evaluation:
 
 bm25:
+https://colab.research.google.com/github/pinecone-io/examples/blob/master/semantic_search_intro/bm25.ipynb
