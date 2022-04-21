@@ -1,0 +1,177 @@
+This is the README file for A0188307X-A0204208U-A0219963R-A0248149W's submission
+Email(s): e0421414@u.nus.edu, e0323891@u.nus.edu, e055621@u.nus.edu, e0923880@u.nus.edu
+
+== Python Version ==
+
+We're using Python Version 3.10.3 for this assignment.
+
+== General Notes about this assignment ==
+
+Index.py:
+
+Indexing is first done in-memory and then written into the disk at the end. The in-memory dictionary stores all the term as key and a tuple containing document frequency and a list of postings as the value to each term. Each posting is a list of document id, logarithmic term frequency, and a position list for positional indexing. 
+
+After writing to the disk, each term's value in the dictionary is now a tuple containing the inverse document frequency and a pointer which will be mapped to the location of the postings list information saved in postings.txt. 
+
+Besides terms, there are also two special keys “DOC_LENGTH" and “DOC_COURT” inside the final dictionary written to disk. They are mapped to the pointers to separate dictionaries saved in postings.txt which store the pre-computed document lengths and a list of court names for each document id. We find it more convenient and less prone errors to save everything inside the two mandatory file dictionary.txt and postings.txt, with the use of special keys. 
+
+The mapping between document ids to a list of courts is saved to optimise ranking in searching step according to the hierarchy of courts provided. A list of courts instead of just 1 court is saved because we observed that there exists entries that are mostly identical in all fields except for the court information. We kept a record of the document ids visited during our indexing step so as to avoid unnecessary processing on duplicate documents.
+
+Structure of in-memory dictionary when terms are the key:
+"term": (df, [(docID1, log_tf1, [positions]), (docID2, log_tf2,[positions]),(docID3, log_tf3,[positions]),...]
+
+Structure of in-memory dictionary when "DOC_LENGTH" is the key:
+"DOC_LENGTH" : { docID1 : doc_length1
+                 ......
+                }
+
+Structure of in-memory dictionary when "DOC_COURT" is the key:
+"DOC_COURT" : { docID1 : [court_name1, court_name2]
+                docID2 : [court_name1]
+                 ......
+                }
+
+Structure of saved dictionary when terms are the key:
+"term": (idf, pointer to postings list in postings.txt) 
+
+
+== Actual indexing steps == 
+1. Read the given csv file using Python csv modules.
+2. Preprocess the text in each document.
+a) Concatenate all the fields in a document into a single string except for the date. We ignored the dates because we felt that dates may not carry significant meaning in a legal setting as many unrelated cases can be written on the same date and it would not be very meaningful for lawyers to search for all the cases written on a specific date. Zones and fields besides the court are not used because we felt that the given documents come from many different sources and they lack a standard format for us to easily extract meaningful zones and fields. 
+
+However, we did consider court names for each document separately and stored them in a special dictionary inside postings.txt. Since a court hierarchy is provided, we may sort search results according to the importance of the court that a document is associated with during searching.
+
+b) A series of text processing is done to standardise the text. Firstly, case folding was applied to convert all texts to lower case. Secondly, non-latin characters such as Chinese are removed. This was done because we observed that certain documents from courts in Hong Kong contains content that are written in Chinese. Since our query will be solely in English, we chose not to waste time in indexing them. Next, all punctuations are removed as we know that no punctuations will appear in queries. We also standardised the spelling of English words using an American to UK English translation table since the data set contains documents from countries and regions that have different English spelling systems. Finally, we tokenise the text into sentences and then words, and perform porter stemming to get the final token.
+
+We chose not perform lemmatization as it would require part-of-speech tagging, which was not very ideal given that our queries are too short in length to generate meaningful context for the pos tagger. In addition, lemmatization would likely increase the indexing time significantly.
+
+3.For each term, if the term is new, add the term to the in-memory dictionary.
+Then add the occurring Document Id (if it has not already been added) and Term frequency
+into the corresponding postings list in the postings and update the document frequency
+in the dictionary.
+
+4. For each document, use a dictionary called freq_map to keep track of the frequency of each term (tf) in the document. For each term, keep track of its position inside the document.
+
+5. For each term in freq_map, convert tf to log_tf where log_tf = 1 + math.log(tf,10). Update the main dictionary with incremented document frequency and new list of [docID, log_tf, position list].
+
+6. For each document, calculate the length of the document vector as sqrt(sum of (log_tf to the power of 2)). Store it in the main dictionary. The length is precomputed to be used for normalization during searching.
+7. Convert document frequency to inverse document frequency for each term-document pair. Pickle the in-memory dictionary and write it to dictionary.txt and posting.txt.
+
+Speed Optimisation
+At first, our indexing process takes > 6hr to complete and it significantly delays our plan to test our indexing methods and search methods. To improve the time efficiency of indexing, we explored a few optimisation methods:
+
+1. Cache for stemming
+After profiling the execution of our index.py, we realised that calling the stemming methods from nltk takes up a significant portion of our execution time. The stemmer is called unnecessarily when the same word appeared many times so we decided to cache the mapping between original term and the stemmed word in a dictionary. This reduces our indexing time to around 6 hours to 3 hours.
+
+2. Data Structure
+Originally, we stored each posting in a tuple. However, given that tuple is an immutable object in Python, a new tuple is created to copy over the existing content whenever the same term is encountered at a different position of the document to update the existing posting. This significantly slows down our indexing process especially for long documents that incur a huge amount of updates in the posting and postings with great length. By changing immutable tuple to mutable list, we successfully reduced our indexing time from 3 hours to around 40 minutes.
+
+== Index compression == 
+In order to meet the size limit of 800MB, we used a few compression techniques in our indexing to optimise the size of files written.
+
+1. Gap Encoding
+In order to perform phrasal query, we stored the positional index of each term for a given document into a position list. However, the position index can become a very large number and takes up significant memory space, especially for long documents. We decided to compress our index using gap encoding which only stores the gaps between a list of numbers instead of the actual numbers. We can do this because we always iterate from the start of a document, and the positional index for a given term is always incremented. In other words, the position list is ordered so we can easily decode the list of gaps into the actual list of numbers.
+
+2. Variable Byte Encoding
+Despite gap encoding, we may still need to store some really large number if the gap between positions is large. In order to further reduce size of our postings.txt, we used variable byte encoding to convert numbers into byte streams of variable sizes that take minimum space for any given number. These byte streams can be easily converted back to numbers later.
+
+
+Search.py:
+
+- Our search function begins by opening up all necessary files, and building the dictionary in memory, since it should only use a small amount.
+The dictionary will follow the same structure as that of dictionary.txt from indexing. The next step is processing the query
+
+- When processing the query, our program will check for quotations and/or boolean operators (AND) to determine how to handle the given
+query. If AND operators are present, the results from the different parts of the query will be intersected at the end. Quotations around
+a phrase represents a phrasal search, while anything without quotations around it is a free-text search.
+
+- Depending on the part of the query (free text, phrasal, or boolean), its results are generated using a corresponding class:
+FreeTextQuery(Query), PhrasalQuery(Query), and BooleanQuery(Query)
+
+  These three classes is where a majority of our document retrieval happens. In the FreeTextQuery class, the term(s) will be preprocessed
+  (tokenized, lowercased, and stemmed). For free text queries, all relevant documents (to at least one term) in the query are returned initially.
+  Depending on the number of query terms received, this will affect the score later. This is done using a generate_results method, and the
+  postings are gathered by loading the specific spot in the pickled postings file (using the offset stored in the dictionary).
+
+  In the PhrasalQuery class, the term(s) are also preprocessed in the same way, and the postings are accessed using the same
+  loading of pickled content as in FreeTextQuery. PhrasalQuery's generate_results method, however, also utilizes positional
+  indexing to make sure that the elements in the document appear in the correct order before returning a docID.
+
+  The BooleanQuery class
+
+
+== Sorting according to Court Hierarchy == 
+At first, we tried to assign an arbitrary additional score for courts of different categories to rank important courts higher. We tried to assign 2 for most important courts, 1 for important courts and 0 for others. However, the performance (evaluated using 3 sample queries) for this implementation was not ideal:
+Average AF2: 0.1410081933
+Average MAP: 0.0550766675
+
+It is possibly because the arbitrary score assigned was too large and hence affected the ranking from Vector Space Model significantly. To solve that, we explored the use of 5 rounds of bubble sort to swap ranking between adjacent document ids according to the relative hierarchy of their courts. As every pass of bubble sort can only affect ranking of adjacent documents which we assume to be mostly equivalent in terms of relevance, this approach will fine tune ranking of documents minimally without distorting results from Vector Space Model. The performance (evaluated using 3 sample queries) for this implementation is:
+
+Average AF2: 0.1186321336
+Average MAP: 0.2665584308
+
+While the average MAP increases, the average AF2 is still below the baseline. One possible reason is that the assumption that documents from more important courts are of higher relevance does not always hold. It is sometimes possible that the lawyer is researching on cases from local courts and hence finds documents from less important courts more relevant.
+
+== Evaluation of Search Performance == 
+Our experimentation and results are discussed in Bonus.docx
+
+
+**** MOVE THESE TO BONUS *********
+======= Baseline ========
+Vector Space Model, i.e. a TF×IDF ranked retrieval implementation in which the entire document is treated without zones (i.e., all zone/field information is removed). The performance (evaluated using 3 sample queries) for this implementation is:
+
+Average AF2: 0.2191442085
+Average MAP: 0.2444116607
+
+== Query Expansion ==
+
+********************************
+
+
+== Files included with this submission ==
+
+List the files in your submission here and provide a short 1 line
+description of each file.  Make sure your submission's files are named
+and formatted correctly.
+
+- index.py - used for creating indexes for the files in the specified directory
+- search.py - used for performing query on the given query input file and store the results as a file
+- dictionary.txt - used for storing the dictionary terms and their corresponding postings offset in the posting file
+- postings.txt - used for storing the document frequency and the list of every doc ID and its weighted term frequency that contains the term
+
+
+
+== Work allocation ==
+
+While most of the assignment we discussed and implemented together, a general work breakdown is as follow:
+
+A0188307X:
+A0204208U:
+A0219963R:
+A0248149W:
+
+
+== Statement of individual work ==
+
+Please put a "x" (without the double quotes) into the bracket of the appropriate statement.
+
+[X] I/We, A0219963R-A0204208U-A0188307X-A0248149W, certify that I/we have followed the CS 3245 Information
+Retrieval class guidelines for homework assignments.  In particular, I/we
+expressly vow that I/we have followed the Facebook rule in discussing
+with others in doing the assignment and did not take notes (digital or
+printed) from the discussions.
+
+== References ==
+Variable byte encoding: 
+http://nlp.stanford.edu/IR-book/html/htmledition/variable-byte-codes-1.html
+https://github.com/utahta/pyvbcode/blob/master/vbcode.py
+
+Lesk Algorithm:
+
+WordNet:
+
+WAF2 evaluation:
+
+bm25:
+
