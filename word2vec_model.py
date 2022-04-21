@@ -36,3 +36,35 @@
 
     # model = gensim.models.word2vec.Word2Vec(sentences=combined_data, vector_size=300, window=3, min_count=2)
     # model.wv.save_word2vec_format('/content/word2vec.bin')
+
+# Copied directly from the deployed heroku server that serves the Word2Vec model
+
+# def word2vec_model_deployment_heroku():
+#     from gensim.models import KeyedVectors
+#     from flask import Flask, jsonify, request
+#     import os
+
+#     app = Flask(__name__)
+#     global model
+#     model = KeyedVectors.load_word2vec_format("word2vec.bin")
+
+
+#     @app.route('/')
+#     def word2vec():
+#         w = request.args['word']
+#         if model == None:
+#             print('loading')
+
+#         w = w[1:-1].split(',') # split the query parameters into words
+#         results = []
+
+#         # for each word return top 5 similar words:
+
+#         for word in w:
+#             results.append(model.most_similar(positive=[word], topn=5))
+#         return jsonify(results)
+
+
+#     if __name__ == '__main__':
+#         port = int(os.environ.get('PORT', 5000))
+#         app.run(host='0.0.0.0', port=port)
