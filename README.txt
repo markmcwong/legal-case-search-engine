@@ -115,16 +115,6 @@ FreeTextQuery(Query), PhrasalQuery(Query), and BooleanQuery(Query)
   A particular downside of this approach was that some words, such as "running", have many different meanings, and the phrasal queries are much better
   at establishing context for the word, while treating it as freetext did not take the different uses of "running" into account, and counted all as relevant.
 
-  search.py & search_test.py: Search_test.py does not use the previously established court hierarchy system of increasing document scores based on court
-  importance. So a document from the Supreme court will appear closer to the top of search.py's results, while this is not the case for search_test.py.
-  We also tried the difference of having a strict vs. non-strict boolean operator during the project lifecycle in these files. In other words, while we
-  originally thought of the AND operator as only returning overlapping documents, we wanted to see how the search engine would be affected by making it
-  more accepting. The reasons for this seem relevant: the user may not know exactly what they are looking for when using the boolean operator, and if their
-  search may end up removing documents that would actually be highly relevant. For example, "fertility treatment" AND damages may, with a strict operator,
-  cause the results to not include highly relevant documents about fertility treatment. With a non-strict operator, the intersection would end up being
-  larger; this had the benefit of providing more leeway to the user for their results, and it would still increase the scores of documents that were
-  more relevant to terms on both sides of the operator; therefore, the idea was that documents with intersection would score highly regardless.
-
   We also tried not using any previously established court hierarchy system to increase document scores based on court importance. So a document from
   the Supreme court will have its score increased solely based on the fact that it is from such a high court, and will likely rank higher than a similar
   document from somewhere such as the HK High Court.
