@@ -76,7 +76,7 @@ In order to perform phrasal query, we stored the positional index of each term f
 2. Variable Byte Encoding
 Despite gap encoding, we may still need to store some really large number if the gap between positions is large. In order to further reduce size of our postings.txt, we used variable byte encoding to convert numbers into byte streams of variable sizes that take minimum space for any given number. These byte streams can be easily converted back to numbers later.
 
-
+====================================================================================================================================================================
 Search.py:
 
 - Our search function begins by opening up all necessary files, and building the dictionary in memory, since it should only use a small amount.
@@ -90,7 +90,7 @@ a phrase represents a phrasal search, while anything without quotations around i
 FreeTextQuery(Query), PhrasalQuery(Query), and BooleanQuery(Query)
 
   These three classes is where a majority of our document retrieval happens. In the FreeTextQuery class, the term(s) will be preprocessed
-  (tokenized, lowercased, and stemmed). For free text queries, all relevant documents (to at least one term) in the query are returned initially.
+  the same way as we did for indexing, except for when we know that the query will not be of a certain format (eg. no need to preprocess removal of punctuations since the queries are punctuation free). For free text queries, all relevant documents (to at least one term) in the query are returned initially.
   Depending on the number of query terms received, this will affect the score later. This is done using a generate_results method, and the
   postings are gathered by loading the specific spot in the pickled postings file (using the offset stored in the dictionary).
 
@@ -98,7 +98,7 @@ FreeTextQuery(Query), PhrasalQuery(Query), and BooleanQuery(Query)
   loading of pickled content as in FreeTextQuery. PhrasalQuery's generate_results method, however, also utilizes positional
   indexing to make sure that the elements in the document appear in the correct order before returning a docID.
 
-  The BooleanQuery class
+  The BooleanQuery class evaluates the LHS and RHS of the "AMD" operator separately, then combines the results together. For example, the query may be quiet and "phone call". In this case, the LHS is evaluated as a free text query and the RHS as a phrasal query. We chose to implement a non-strict boolean after some experimentation as we found that returning only documents in the intersection is too small, resulting in a low number of actual relevant documents. This gave us a higher score as well, which matches the intuition that in practice the person searching using boolean may not have a strict requirement of having two parts both. 
 
 
 == Sorting according to Court Hierarchy == 
