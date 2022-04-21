@@ -125,6 +125,10 @@ FreeTextQuery(Query), PhrasalQuery(Query), and BooleanQuery(Query)
   larger; this had the benefit of providing more leeway to the user for their results, and it would still increase the scores of documents that were
   more relevant to terms on both sides of the operator; therefore, the idea was that documents with intersection would score highly regardless.
 
+ == Our Final Decisions on Search Methods ==
+
+ 
+
 
 == Sorting according to Court Hierarchy ==
 At first, we tried to assign an arbitrary additional score for courts of different categories to rank important courts higher. We tried to assign 2 for most important courts, 1 for important courts and 0 for others. However, the performance (evaluated using 3 sample queries) for this implementation was not ideal:
