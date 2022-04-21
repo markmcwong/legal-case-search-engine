@@ -20,6 +20,8 @@ from setup import setup_dependencies
 
 nltk.data.path.append("./nltk_data")
 
+COURT_HIERARCHY = {'SG Court of Appeal': 2, 'SG Privy Council': 2, 'UK House of Lords': 2, 'UK Supreme Court': 2, 'High Court of Australia': 2, 'CA Supreme Court': 2, 'SG High Court': 1, 'Singapore International Commercial Court': 1, 'HK High Court': 1, 'HK Court of First Instance': 1, 'UK Crown Court': 1, 'UK Court of Appeal': 1, 'UK High Court': 1, 'Federal Court of Australia': 1, 'NSW Court of Appeal': 1, 'NSW Court of Criminal Appeal': 1, 'NSW Supreme Court': 1}
+
 ps = PorterStemmer()
 # global variable to hold the total number of documents indexed/searching through
 num_of_docs = 17137
@@ -148,7 +150,10 @@ def process_query(queries_file, posting_file, results_file):
         print("Query string: ", query.query_string, '\n')
 
         if(results != None):
-            results_file.write(' '.join(list(map(lambda x: str(x[1]), results))) + "\n")
+            # Apply bubble sort to move up docID from courts with higher priority
+            results = list(map(lambda x: str(x[1]), results))
+            #results = bubbleSort(results)
+            results_file.write(' '.join(results) + "\n")
         else:
             results_file.write("\n")
 
@@ -268,50 +273,77 @@ class BooleanQuery(Query):
         True) # currently not a strict intersection
         return results_to_return
 
-COURT_HIERARCHY = {'SG Court of Appeal': 2, 'SG Privy Council': 2, 'UK House of Lords': 2, 'UK Supreme Court': 2, 'High Court of Australia': 2, 'CA Supreme Court': 2, 'SG High Court': 1, 'Singapore International Commercial Court': 1, 'HK High Court': 1, 'HK Court of First Instance': 1, 'UK Crown Court': 1, 'UK Court of Appeal': 1, 'UK High Court': 1, 'Federal Court of Australia': 1, 'NSW Court of Appeal': 1, 'NSW Court of Criminal Appeal': 1, 'NSW Supreme Court': 1}
 
 class FreeTextQuery(Query):
     def __init__(self, query_string):
         super().__init__(query_string, is_query_expanded = True)
 
     def generate_results(self, terms, expanded_terms, query_logtf_dic):
-        scores = {}
-        relevant_docs = []
-        for idx, term in enumerate(terms + expanded_terms):
+        # Initialize the dictionary for storing normalized vectors for each documents that contain a particular query term
+        term_doc_dictionary = {}
+        # Store unique docIDs that contain at least one of the term in the query
+        candidates = set()
+        
+        # Initialize a dictionary to store the weighted vector for each term
+        query_term_vector = {}
+        
+        for idx, term in enumerate(terms):
+            term_doc_dictionary[term] = {}
             # if term not in dictionary, ignore that term
             if term in dictionary:
                 posting_file.seek(int(dictionary[term][1]))
                 term_posting_list = pickle.load(posting_file) # load term postings
                 term_posting_list = decompress_posting(term_posting_list) # Apply decompression
                 ## Calculate query weight
-                weight = 1 if term in terms else 0.2 # weightage adjustment for expanded terms vs original term in query
-                query_weight = query_logtf_dic[term] * math.log(num_of_docs/dictionary[term][0]) * weight ##logtf * idf
+                query_weight = query_logtf_dic[term] * dictionary[term][0] ##logtf * idf
+                query_term_vector[term] = query_weight
+                
                 for doc in term_posting_list:
-                    if doc[0] not in scores:
-                        scores[doc[0]] = 0
-                        
-                    # original scoring method:
-                    # scores[doc[0]] += query_weight * doc[1] ## scores[docid] += queryweight * docweight
-                    scores[doc[0]] += bm25(dictionary[term][0], doc_lengths_dict[doc[0]], doc[1])
-                    relevant_docs.append(doc[0])
-        # Normalize
-        # for i in relevant_docs:
-        #     scores[i] = scores[i] / doc_lengths_dict[i]
+                    docID, log_tf = doc[0], doc[1]
+                    doc_length = doc_lengths_dict[docID]
+                    # Apply length normalization
+                    term_doc_dictionary[term][docID] = log_tf / doc_length
+                    candidates.add(docID)
+                    
+        # Initialize
+        ranking = {}
+    
+        for docID in candidates:
+            score = 0
+            
+            for idx, term in enumerate(terms):
+                # vector score will be 0 if the document does not contain the term, so just skip
+                if docID not in term_doc_dictionary[term]:
+                    continue
+                
+                else:
+                    # compute cosine similarity using dot product
+                    term_query_score = query_term_vector[term]
+                    term_doc_score = term_doc_dictionary[term][docID]
+                    cos_similarity = term_query_score * term_doc_score
+                    score += cos_similarity
+            
+            # Sort by decreasing order of the score and ascending order of docID for the same score
+            #heapq.heappush(pq, (score, -1 * int(docID)))
+            ranking[int(docID)] = score
 
+        """
         # Add court score
         ptr = dictionary['DOC_COURT'] # pointer to another dictionary
         posting_file.seek(int(ptr))
         court_dic = pickle.load(posting_file) # dictionary containing docid -> [court...] info
-        for did, val in scores.items(): # repeat for each document
+        for did, val in ranking.items(): # repeat for each document
             courts = court_dic[str(did)]
             # extract greatest court value
-            court_value = max([COURT_HIERARCHY[court] if court in COURT_HIERARCHY else 0 for court in courts])
+            court_value = max([COURT_HIERARCHY[court] if court in COURT_HIERARCHY else 0 for court in courts]) / 2
             # modify score to include court value
-            scores[did] += court_value
-
-
+            ranking[did] += court_value
+        
+        """
+        
         # Sort and return docs in ranked order
-        results_to_return = sorted(((val, did) for did, val in scores.items()), reverse = True)
+        results_to_return = sorted(((val, did) for did, val in ranking.items()), reverse = True)
+        #results_to_return = map(lambda x: str(-1 * x[1]), list(item for _, _, item in pq)
         print("number of docs returned: ", len(results_to_return))
         return results_to_return
 
@@ -381,44 +413,79 @@ class PhrasalQuery(Query):
         #Score calculation based on relevant docs
         relevant_docs = list(map(lambda x: x[0], previous_phrase_results))
         # print('previous: ', relevant_docs)
-        scores = {}
+        
+        # Initialize the dictionary for storing normalized vectors for each documents that contain a particular query term
+        term_doc_dictionary = {}
+        # Store unique docIDs that contain at least one of the term in the query
+        candidates = set()
+        
+        # Initialize a dictionary to store the weighted vector for each term
+        query_term_vector = {}
+        
         for idx, term in enumerate(terms):
+            term_doc_dictionary[term] = {}
             # if term not in dictionary, ignore that term
             if term in dictionary:
                 posting_file.seek(int(dictionary[term][1]))
                 term_posting_list = pickle.load(posting_file) # load term postings
-                term_posting_list = decompress_posting(term_posting_list)
+                term_posting_list = decompress_posting(term_posting_list) # Apply decompression
                 ## Calculate query weight
-                query_weight = query_logtf_dic[term] * math.log(num_of_docs/dictionary[term][0]) ##logtf * idf
+                query_weight = query_logtf_dic[term] * dictionary[term][0] ##logtf * idf
+                query_term_vector[term] = query_weight
+                
                 for doc in term_posting_list:
-                    if doc[0] not in relevant_docs: ## skip docs that are not relevant
+                    if doc[0] not in relevant_docs:
                         continue
-                    if doc[0] not in scores:
-                        scores[doc[0]] = 0
-                    scores[doc[0]] += query_weight * doc[1] ## scores[docid] += queryweight * docweight
-        # Normalize
-        for i in relevant_docs:
-            scores[i] = scores[i] / doc_lengths_dict[i]
-
+                    docID, log_tf = doc[0], doc[1]
+                    doc_length = doc_lengths_dict[docID]
+                    # Apply length normalization
+                    term_doc_dictionary[term][docID] = log_tf / doc_length
+                    candidates.add(docID)
+                    
+        # Initialize
+        ranking = {}
+    
+        for docID in candidates:
+            score = 0
+            
+            for idx, term in enumerate(terms):
+                # vector score will be 0 if the document does not contain the term, so just skip
+                if docID not in term_doc_dictionary[term]:
+                    continue
+                
+                else:
+                    # compute cosine similarity using dot product
+                    term_query_score = query_term_vector[term]
+                    term_doc_score = term_doc_dictionary[term][docID]
+                    cos_similarity = term_query_score * term_doc_score
+                    score += cos_similarity
+            
+            # Sort by decreasing order of the score and ascending order of docID for the same score
+            #heapq.heappush(pq, (score, -1 * int(docID)))
+            ranking[int(docID)] = score
+        
+        """
         # Add court score
         ptr = dictionary['DOC_COURT'] # pointer to another dictionary
         posting_file.seek(ptr)
         court_dic = pickle.load(posting_file) # dictionary containing docid -> [court...] info
-        for did, val in scores.items(): # repeat for each document
+        for did, val in ranking.items(): # repeat for each document
             courts = court_dic[str(did)]
             # extract greatest court value
-            court_value = max([COURT_HIERARCHY[court] if court in COURT_HIERARCHY else 0 for court in courts])
+            court_value = max([COURT_HIERARCHY[court] if court in COURT_HIERARCHY else 0 for court in courts]) / 2
             # modify score to include court value
-            scores[did] += court_value
+            ranking[did] += court_value
 
             #if the phrase equals a court, add to the score of all docs from that court
             if self.query_string in courts:
                 if did not in docs_with_court_queries_found:
                     docs_with_court_queries_found.append(did)
-                    scores[did]  = scores[did] * 1.3
-
+                    ranking[did] = ranking[did] * 1.3
+        """
         # Sort and return docs in ranked order
-        results_to_return = sorted(((val, did) for did, val in scores.items()), reverse = True)
+        results_to_return = sorted(((val, did) for did, val in ranking.items()), reverse = True)
+        #results_to_return = map(lambda x: str(-1 * x[1]), list(item for _, _, item in pq)
+        print("number of docs returned: ", len(results_to_return))
         return results_to_return
 
 
@@ -428,10 +495,14 @@ def build_dictionary(dict_file):
     line by line, very small overhead for search function
     @param dict_file [string]: name/path of the dictionary file
     """
-    global dictionary, doc_lengths_dict
+    global dictionary, doc_lengths_dict,court_dict
     dictionary = pickle.load(dict_file)
     posting_file.seek(int(dictionary['DOC_LENGTH']))
     doc_lengths_dict = pickle.load(posting_file)
+    
+    # Court dictionary to be used in court hierarchy evaluation
+    posting_file.seek(dictionary['DOC_COURT'])
+    court_dict = pickle.load(posting_file) # dictionary containing docid -> [court...] info
 
 
 def idf_weight(doc_freq):
@@ -493,6 +564,24 @@ def from_deltas(deltas):
         numbers.append(i + numbers[-1])
     return numbers
 
+def singleBubbleSort(results):
+    #One round of bubble sort to increase ranking for documents with higher courts priority
+    for x in range(len(results) - 1):
+        docId1 = results[x]
+        docId2 = results[x + 1]
+        # If lower ranked doc id is from a court with higher priority
+        if court_dict[docId2] > court_dict[docId1]:
+            # swap the two doc id
+            results[x] = docId2
+            results[x + 1] = docId1
+    return results
+
+def bubbleSort(results):
+    # Do 5 passes of bubbleSort on results
+    for i in range(10):
+        results = singleBubbleSort(results)
+    return results
+    
 try:
     opts, args = getopt.getopt(sys.argv[1:], 'd:p:q:o:')
 except getopt.GetoptError:
