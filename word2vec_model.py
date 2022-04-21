@@ -55,8 +55,11 @@
 #         if model == None:
 #             print('loading')
 
-#         w = w[1:-1].split(',')
+#         w = w[1:-1].split(',') # split the query parameters into words
 #         results = []
+
+#         # for each word return top 5 similar words:
+
 #         for word in w:
 #             results.append(model.most_similar(positive=[word], topn=5))
 #         return jsonify(results)
@@ -65,7 +68,3 @@
 #     if __name__ == '__main__':
 #         port = int(os.environ.get('PORT', 5000))
 #         app.run(host='0.0.0.0', port=port)
-#         # app.run()
-#         # print('loading')
-#         # model = KeyedVectors.load_word2vec_format("word2vec.bin")
-#         print('now it is working')
