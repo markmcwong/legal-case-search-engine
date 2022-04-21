@@ -106,7 +106,7 @@ FreeTextQuery(Query), PhrasalQuery(Query), and BooleanQuery(Query)
 == Different Approaches to Search ==
 
 - It should be noted that a number of different approaches were tested during the lifetime of this project's development for query searching.
-  They can be seen through the different files included, and they all have their own strength's and weaknesses:
+  They can be seen through the different files included, and they all have their own strength's and weaknesses.
 
   freetext.py: We wanted to see how the performance would be affected if we make the requirements less strict for phrasal searches, and instead
   decided to treat them like free text queries of a longer length, which would allow for more advanced searches using the boolean operator as well.
@@ -125,8 +125,27 @@ FreeTextQuery(Query), PhrasalQuery(Query), and BooleanQuery(Query)
   larger; this had the benefit of providing more leeway to the user for their results, and it would still increase the scores of documents that were
   more relevant to terms on both sides of the operator; therefore, the idea was that documents with intersection would score highly regardless.
 
+  We also tried not using any previously established court hierarchy system to increase document scores based on court importance. So a document from
+  the Supreme court will have its score increased solely based on the fact that it is from such a high court, and will likely rank higher than a similar
+  document from somewhere such as the HK High Court.
+
+  We also tried the difference of having a strict vs. non-strict boolean operator during the project lifecycle. In other words, while we
+  originally thought of the AND operator as only returning overlapping documents, we wanted to see how the search engine would be affected by making it
+  more accepting. The reasons for this seem relevant: the user may not know exactly what they are looking for when using the boolean operator, and if their
+  search may end up removing documents that would actually be highly relevant. For example, "fertility treatment" AND damages may, with a strict operator,
+  cause the results to not include highly relevant documents about fertility treatment. With a non-strict operator, the intersection would end up being
+  larger; this had the benefit of providing more leeway to the user for their results, and it would still increase the scores of documents that were
+  more relevant to terms on both sides of the operator; therefore, the idea was that documents with intersection would score highly regardless.
+
  == Our Final Decisions on Search Methods ==
 
+  In the end, we chose our particular search methods based on their results on the dataset.
+  We chose to keep our experimentations with non-strict boolean operators, as we believe they increase leniency while still keeping the most relevant results at
+  the top of the document rankings.
+  We no longer use court hierarchy in our search rankings, due to it giving worse results.
+  Phrasal search functions more strictly, and is not treated merely as free text.
+
+  The query refinement methods used can be seen in the Bonus.docx
 
 
 
@@ -162,15 +181,6 @@ Our experimentation and results are discussed in Bonus.docx
   which is especially difficult with regards to boolean queries. We have not decided to further experiment with the Doc2Vec / Word2Vec calculating document similarity method.
   Details in https://colab.research.google.com/drive/10oYY8Ko4V4RYfER0v2R571x9Umr-9cXd#scrollTo=wJaXk54lr3d8
 
-**** MOVE THESE TO BONUS *********
-======= Baseline ========
-Vector Space Model, i.e. a TF×IDF ranked retrieval implementation in which the entire document is treated without zones (i.e., all zone/field information is removed). The performance (evaluated using 3 sample queries) for this implementation is:
-
-Average AF2: 0.2191442085
-Average MAP: 0.2444116607
-
-== Query Expansion ==
-
 ********************************
 
 == Files included with this submission ==
@@ -185,7 +195,6 @@ and formatted correctly.
 - postings.txt - used for storing the document frequency and the list of every doc ID and its weighted term frequency that contains the term
 - Bonus.docx - A word document explaining our different approaches to query refinement
 - freetext.py - A version of the search engine treating everything as free text
-- search_test.py - A past version of the search engine which was used to test other search methods
 - index_helper.py -
 - bm25.py - used for experiments with BM25 scoring method replacing TF-IDF
 - model_request.py - used for sending request to the heroku server for getting similar words in query expansions
