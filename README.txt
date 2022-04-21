@@ -98,7 +98,7 @@ FreeTextQuery(Query), PhrasalQuery(Query), and BooleanQuery(Query)
   loading of pickled content as in FreeTextQuery. PhrasalQuery's generate_results method, however, also utilizes positional
   indexing to make sure that the elements in the document appear in the correct order before returning a docID.
 
-  The BooleanQuery class evaluates the LHS and RHS of the "AMD" operator separately, then combines the results together. For example, the query may be quiet and "phone call". In this case, the LHS is evaluated as a free text query and the RHS as a phrasal query. We chose to implement a non-strict boolean after some experimentation as we found that returning only documents in the intersection is too small, resulting in a low number of actual relevant documents. This gave us a higher score as well, which matches the intuition that in practice the person searching using boolean may not have a strict requirement of having two parts both. 
+  The BooleanQuery class evaluates the LHS and RHS of the "AND" operator separately, then combines the results together. For example, the query may be quiet and "phone call". In this case, the LHS is evaluated as a free text query and the RHS as a phrasal query. We chose to implement a non-strict boolean after some experimentation as we found that returning only documents in the intersection is too small, resulting in a low number of actual relevant documents. This gave us a higher score as well, which matches the intuition that in practice the person searching using boolean may not have a strict requirement of having two parts both. 
 
 
 == Sorting according to Court Hierarchy == 
