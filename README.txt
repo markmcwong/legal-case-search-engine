@@ -175,10 +175,10 @@ and formatted correctly.
 
 While most of the assignment we discussed and implemented together, a general work breakdown is as follow:
 
-A0188307X:
-A0204208U:
-A0219963R:
-A0248149W:
+A0188307X: Indexing process, positional indexing, court hierarchy, score calculation in search
+A0204208U: Indexing process, compression techniques
+A0219963R: Search process, query expansion techniques
+A0248149W: Search process, court score
 
 
 == Statement of individual work ==
